@@ -1,0 +1,3100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contract Note Extractor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#0d1b2a; --ink-2:#16293d; --ink-3:#1f3852;
+    --paper:#e9edf1; --surface:#ffffff; --surface-2:#f5f7f9;
+    --line:#dbe1e8; --line-strong:#c4cdd6;
+    --text:#22303c; --muted:#66727f; --muted-2:#8b95a0;
+    --green:#0f7a4d; --green-soft:#e2f1e9; --green-line:#bfe0cf;
+    --red:#c1362d; --red-soft:#fbe7e5; --red-line:#f0c3bf;
+    --amber:#a9701a; --amber-soft:#f8eed9; --amber-line:#e6d3a6;
+    --gold:#9a7726;
+    --shadow:0 1px 2px rgba(13,27,42,.06), 0 8px 24px rgba(13,27,42,.08);
+    --shadow-lg:0 24px 60px rgba(13,27,42,.28);
+    --r:10px; --r-sm:7px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Inter",system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+  h1,h2,h3{font-family:"Space Grotesk",sans-serif;margin:0;letter-spacing:-.01em}
+  button{font-family:inherit;cursor:pointer}
+  input{font-family:inherit}
+
+  /* ---------- Header ---------- */
+  .topbar{
+    background:linear-gradient(180deg,var(--ink) 0%, var(--ink-2) 100%);
+    color:#eef3f8;
+    border-bottom:2px solid var(--ink-3);
+  }
+  .topbar-inner{
+    max-width:1180px;margin:0 auto;padding:22px 28px;
+    display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  }
+  .brand{display:flex;flex-direction:column;gap:3px;flex:1;min-width:260px}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.22em;
+    text-transform:uppercase;color:#7fa8c9;
+  }
+  .brand h1{font-size:27px;font-weight:700;color:#fff}
+  .brand p{margin:2px 0 0;font-size:13.5px;color:#a7b8c8;max-width:520px}
+
+  /* on-device seal */
+  .seal{
+    position:relative;width:104px;height:104px;flex:0 0 auto;
+    display:grid;place-items:center;color:#bfe6cf;
+  }
+  .seal svg{position:absolute;inset:0;animation:spin 60s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .seal-core{
+    position:relative;width:62px;height:62px;border-radius:50%;
+    border:1.5px solid #3f6f52;background:rgba(15,122,77,.16);
+    display:grid;place-items:center;text-align:center;
+  }
+  .seal-core b{font-family:"Space Grotesk";font-size:10px;line-height:1.15;color:#cdeede;font-weight:700}
+  .seal-core span{font-family:"IBM Plex Mono";font-size:8px;letter-spacing:.1em;color:#8fc7a6}
+
+  /* ---------- Layout ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 28px 80px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);
+  }
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:15px 18px;border-bottom:1px solid var(--line);
+  }
+  .card-head h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .card-head .ct{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted-2);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:20px;padding:2px 10px}
+  .num-chip{
+    display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;
+    background:var(--ink);color:#fff;font-family:"IBM Plex Mono";font-size:12px;font-weight:600;
+  }
+  .card-body{padding:18px}
+
+  /* ---------- Dropzone ---------- */
+  .drop{
+    border:1.6px dashed var(--line-strong);border-radius:var(--r-sm);
+    background:var(--surface-2);padding:30px 20px;text-align:center;
+    transition:border-color .15s, background .15s;
+  }
+  .drop.hot{border-color:var(--green);background:var(--green-soft)}
+  .drop .ic{font-size:26px}
+  .drop p{margin:8px 0 3px;font-size:14px;font-weight:500}
+  .drop small{color:var(--muted);font-size:12.5px}
+  .drop .pick{
+    margin-top:12px;display:inline-block;background:var(--ink);color:#fff;
+    border:none;border-radius:var(--r-sm);padding:9px 16px;font-size:13px;font-weight:600;
+  }
+  .drop .pick:hover{background:var(--ink-2)}
+
+  .filechips{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+  .filechip{
+    display:flex;align-items:center;gap:9px;font-size:12.5px;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:7px 10px;
+  }
+  .filechip .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filechip .rm{border:none;background:none;color:var(--muted-2);font-size:16px;line-height:1;padding:0 2px}
+  .filechip .rm:hover{color:var(--red)}
+  .filechip .sz{color:var(--muted-2);font-family:"IBM Plex Mono";font-size:11px}
+
+  /* ---------- Password panel ---------- */
+  .pw-import{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .btn{
+    border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r-sm);
+    padding:8px 13px;font-size:12.5px;font-weight:600;color:var(--text);display:inline-flex;
+    align-items:center;gap:7px;transition:background .12s,border-color .12s;
+  }
+  .btn:hover{background:var(--surface-2);border-color:var(--muted-2)}
+  .btn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn.dark:hover{background:var(--ink-2)}
+  .btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+  .btn.green:hover{filter:brightness(1.06)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .collapse-h{
+    display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+    user-select:none;font-size:12.5px;color:var(--muted);padding:6px 0;
+  }
+  .collapse-h .chev{transition:transform .18s}
+  .collapse-h.open .chev{transform:rotate(90deg)}
+  .reveal-btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;
+    padding:3px 10px;font-size:11px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+  .reveal-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+  .pwrow input.masked{-webkit-text-security:disc;text-security:disc;letter-spacing:1px}
+  .masked-note{font-size:11.5px;color:var(--muted-2);padding:12px 4px;text-align:center;font-style:italic}
+  .pwlist{display:none;flex-direction:column;gap:6px;margin-top:8px;max-height:230px;overflow:auto;padding-right:2px}
+  .pwlist.open{display:flex}
+  .pwrow{display:flex;align-items:center;gap:8px}
+  .pwrow .idx{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted-2);width:22px;text-align:right}
+  .pwrow input{
+    flex:1;border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:13px;
+    font-family:"IBM Plex Mono";background:var(--surface-2);color:var(--text);
+  }
+  .pwrow input:focus{outline:2px solid var(--ink-3);outline-offset:-1px;background:#fff}
+  .pwrow .del{border:none;background:none;color:var(--muted-2);font-size:16px;padding:0 4px;line-height:1}
+  .pwrow .del:hover{color:var(--red)}
+  .pw-add{display:flex;gap:8px;margin-top:10px}
+  .pw-add input{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;font-family:"IBM Plex Mono"}
+  .pw-add input:focus{outline:2px solid var(--ink-3);outline-offset:-1px}
+  .pw-empty{font-size:12.5px;color:var(--muted-2);padding:10px 0;text-align:center}
+
+  /* ---------- Action bar ---------- */
+  .actionbar{
+    display:flex;align-items:center;gap:16px;margin:22px 0;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .run{
+    background:var(--green);color:#fff;border:none;border-radius:var(--r-sm);
+    padding:12px 22px;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:9px;
+  }
+  .run:hover{filter:brightness(1.05)}
+  .run:disabled{background:var(--muted-2);cursor:not-allowed;filter:none}
+  .progress-wrap{flex:1;min-width:200px;display:none}
+  .progress-wrap.on{display:block}
+  .progress-top{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .progress-top b{font-family:"IBM Plex Mono";color:var(--text)}
+  .bar{height:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),#16a06a);transition:width .3s}
+
+  /* ---------- Results ---------- */
+  .results-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .results-head h2{font-size:18px;font-weight:600}
+  .exports{display:flex;gap:8px}
+  .tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:920px}
+  thead th{
+    background:var(--ink);color:#dfe9f2;font-family:"Space Grotesk";font-weight:600;font-size:11.5px;
+    letter-spacing:.03em;text-transform:uppercase;text-align:left;padding:11px 14px;white-space:nowrap;
+    cursor:pointer;user-select:none;position:relative;
+  }
+  thead th:hover{background:var(--ink-2)}
+  thead th .ar{opacity:.4;margin-left:5px;font-size:10px}
+  thead th.sorted .ar{opacity:1}
+  tbody td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--surface-2)}
+  td.n{font-family:"IBM Plex Mono";text-align:right;white-space:nowrap}
+  .scrip{font-weight:600;color:var(--ink)}
+  .isin{display:block;font-family:"IBM Plex Mono";font-size:10.5px;color:var(--muted-2);font-weight:400}
+  .side{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:11.5px;
+    font-family:"IBM Plex Mono";padding:2px 9px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em}
+  .side.buy{background:var(--green-soft);color:var(--green);border:1px solid var(--green-line)}
+  .side.sell{background:var(--red-soft);color:var(--red);border:1px solid var(--red-line)}
+  .side.na{background:var(--surface-2);color:var(--muted-2);border:1px solid var(--line)}
+  .nf{color:var(--muted-2);font-style:italic}
+
+  /* status stamp */
+  .stamp{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+    padding:4px 10px;border-radius:20px;white-space:nowrap;font-family:"IBM Plex Mono"}
+  .stamp.ok{background:var(--green-soft);color:var(--green);border:1px solid var(--green-line)}
+  .stamp.lock{background:var(--red-soft);color:var(--red);border:1px solid var(--red-line)}
+  .stamp.warn{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)}
+
+  .empty-state{padding:60px 24px;text-align:center;color:var(--muted)}
+  .empty-state .ic{font-size:34px;opacity:.5}
+  .empty-state p{margin:12px 0 0;font-size:14px}
+  .filerow td{background:var(--surface-2);font-weight:600}
+  .filerow .fn{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .filerow .pw-used{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--muted-2);font-weight:400}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(13,27,42,.55);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;padding:20px;z-index:50;
+    opacity:0;transition:opacity .2s;
+  }
+  .overlay.on{display:flex;opacity:1}
+  .modal{
+    background:var(--surface);width:100%;max-width:520px;border-radius:16px;overflow:hidden;
+    box-shadow:var(--shadow-lg);transform:translateY(14px) scale(.98);opacity:0;
+    transition:transform .26s cubic-bezier(.2,.7,.3,1), opacity .26s;
+    border-top:4px solid var(--red);
+  }
+  .overlay.on .modal{transform:none;opacity:1}
+  .modal-head{padding:20px 22px 14px;display:flex;gap:14px;align-items:flex-start}
+  .modal-lock{
+    flex:0 0 auto;width:42px;height:42px;border-radius:11px;background:var(--red-soft);
+    border:1px solid var(--red-line);display:grid;place-items:center;font-size:20px;
+  }
+  .modal-head h3{font-size:17px;color:var(--ink)}
+  .modal-head p{margin:3px 0 0;font-size:13px;color:var(--muted)}
+  .modal-body{padding:4px 22px 8px;max-height:46vh;overflow:auto}
+  .failfile{
+    border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:12px;background:var(--surface-2);
+  }
+  .failfile .ftop{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:10px}
+  .failfile .ftop .lk{color:var(--red)}
+  .failfile.solved{border-color:var(--green-line);background:var(--green-soft)}
+  .failfile.solved .ftop{color:var(--green)}
+  .retry-row{display:flex;gap:8px}
+  .retry-row input{
+    flex:1;border:1px solid var(--line);border-radius:7px;padding:9px 11px;font-size:13px;
+    font-family:"IBM Plex Mono";background:#fff;
+  }
+  .retry-row input:focus{outline:2px solid var(--red);outline-offset:-1px}
+  .retry-row .rb{background:var(--ink);color:#fff;border:none;border-radius:7px;padding:0 16px;font-size:13px;font-weight:600}
+  .retry-row .rb:hover{background:var(--ink-2)}
+  .addopt{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+  .addopt input{width:15px;height:15px;accent-color:var(--green)}
+  .fmsg{font-size:12px;margin-top:8px;font-family:"IBM Plex Mono"}
+  .fmsg.bad{color:var(--red)}
+  .fmsg.good{color:var(--green)}
+  .modal-foot{padding:14px 22px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);margin-top:6px}
+  .modal-foot .note{font-size:11.5px;color:var(--muted-2)}
+
+
+  .conf-badge{display:inline-block;font-family:"IBM Plex Mono";font-size:9.5px;padding:1px 6px;
+    border-radius:4px;margin-top:3px;letter-spacing:.02em}
+  .conf-verified{background:var(--green-soft);color:var(--green);border:1px solid var(--green-line)}
+  .conf-computed{background:#e8f0f7;color:#2a5b85;border:1px solid #c3d7e8}
+  .conf-stated{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)}
+  .conf-gross{background:var(--red-soft);color:var(--red);border:1px solid var(--red-line);font-weight:600}
+  .blockbar{background:var(--red-soft);border:1px solid var(--red-line);color:var(--red);
+    border-radius:8px;padding:11px 14px;font-size:12.5px;margin-bottom:14px;display:none;font-weight:500}
+  .blockbar.on{display:block}
+  .blockbar a{color:inherit}
+  .lockbar{background:var(--ink);border:1px solid var(--ink-2);color:#fff;border-radius:8px;padding:11px 14px;
+    font-size:12.5px;margin-bottom:14px;display:none;font-weight:500;align-items:center;justify-content:space-between;gap:12px}
+  .lockbar.on{display:flex}
+  .lockbar .lb-btn{background:#fff;color:var(--ink);border:none;border-radius:7px;padding:7px 14px;font-weight:700;
+    font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .lockbar .lb-btn:hover{background:#e8edf2}
+  .rowbtn{border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:11px;
+    padding:3px 9px;margin-top:6px;color:var(--ink);font-weight:700;cursor:pointer}
+  .rowbtn:hover{border-color:var(--ink-3)}
+  .rowbtn.lock{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .rowbtn.lock:hover{background:var(--ink-2)}
+  .acct.miss{cursor:pointer;text-decoration:underline dotted}
+  .acct.miss:hover{filter:brightness(.9)}
+  .basis{display:block;font-family:"IBM Plex Mono";font-size:10px;color:var(--muted-2);font-weight:400;margin-top:2px}
+  .inspect{border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:11px;
+    padding:3px 9px;margin-top:6px;color:var(--muted);font-weight:600}
+  .inspect:hover{border-color:var(--ink-3);color:var(--ink)}
+  .modal.wide{max-width:820px;border-top-color:var(--ink)}
+  .dump{font-family:"IBM Plex Mono";font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:14px;margin:0;
+    max-height:52vh;overflow:auto;color:var(--text)}
+  .dump .hl{background:#fff5cc;border-radius:3px;padding:0 2px}
+  .diagline{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6}
+  .diagline b{color:var(--ink);font-family:"IBM Plex Mono";font-size:11.5px}
+  .sel{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:12.5px;background:var(--surface);color:var(--text);font-family:inherit}
+  .setrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:12.5px;border-bottom:1px dashed var(--line)}
+  .setrow:last-child{border-bottom:none}
+  .setrow span{color:var(--muted)}
+  .acct{display:block;font-family:"IBM Plex Mono";font-size:10.5px;margin-top:3px}
+  .acct.ok{color:var(--green)}
+  .acct.miss{color:var(--red)}
+  .acct.sugg{color:var(--amber)}
+  .tplfile{font-size:12px;color:var(--muted);margin-top:8px;font-family:"IBM Plex Mono"}
+  .cand{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+  .cand button{border:1px solid var(--line-strong);background:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-family:"IBM Plex Mono"}
+  .cand button:hover{border-color:var(--green);color:var(--green)}
+  .cand .pct{color:var(--muted-2);font-size:10.5px}
+  .warnbar{background:var(--amber-soft);border:1px solid var(--amber-line);color:var(--amber);
+    border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;display:none}
+  .warnbar.on{display:block}
+  .footer-note{margin-top:34px;text-align:center;font-size:12px;color:var(--muted-2);line-height:1.6}
+  .footer-note b{color:var(--muted)}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;
+    box-shadow:var(--shadow-lg);opacity:0;transition:.25s;z-index:60;pointer-events:none;
+  }
+  .toast.on{opacity:1;transform:translateX(-50%)}
+  .hint{font-size:12px;color:var(--muted-2);margin-top:10px;line-height:1.55}
+  /* ---------- Auth, users & refresh ---------- */
+  body{background:linear-gradient(180deg,#eef2f6 0%, #e6ebf0 100%)}
+  .btn{transition:transform .06s ease, box-shadow .12s ease, background .12s ease, filter .12s ease}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(13,27,42,.10)}
+  .btn:active{transform:translateY(0)}
+  .card{transition:box-shadow .16s ease, transform .16s ease}
+  .card:hover{box-shadow:0 2px 4px rgba(13,27,42,.06), 0 14px 34px rgba(13,27,42,.10)}
+
+  .userbox{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+  .userbox .who{display:flex;flex-direction:column;line-height:1.2;text-align:right}
+  .userbox .who b{color:#fff;font-size:14px}
+  .userbox .who span{font-family:"IBM Plex Mono";font-size:10.5px;letter-spacing:.12em;color:#8fc7a6;text-transform:uppercase}
+  .rolebadge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10px;letter-spacing:.1em;
+    font-family:"IBM Plex Mono";text-transform:uppercase;border:1px solid #3f6f52;color:#cdeede;background:rgba(15,122,77,.16)}
+  .rolebadge.user{border-color:#3f5f7f;color:#cfe2f4;background:rgba(31,56,82,.28)}
+  .btn.logout{background:transparent;color:#cfe0ee;border-color:#3f6f8f}
+  .btn.logout:hover{background:rgba(255,255,255,.08)}
+
+  #authGate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(1200px 600px at 50% -10%, #1f3852 0%, #0d1b2a 60%, #091320 100%);padding:20px}
+  .auth-card{width:100%;max-width:380px;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-lg);
+    padding:26px 26px 22px;border:1px solid rgba(255,255,255,.06)}
+  .auth-card .lock{width:46px;height:46px;border-radius:12px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:22px;margin-bottom:14px}
+  .auth-card h2{font-family:"Space Grotesk";font-size:20px;color:var(--ink);margin:0 0 2px}
+  .auth-card p{margin:0 0 16px;font-size:13px;color:var(--muted)}
+  .auth-field{margin-bottom:12px}
+  .auth-field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .auth-field input{width:100%;box-sizing:border-box;border:1px solid var(--line-strong);border-radius:8px;
+    padding:11px 12px;font-size:14px;font-family:"IBM Plex Mono"}
+  .auth-field input:focus{outline:2px solid var(--ink-3);outline-offset:-1px}
+  .auth-card .go{width:100%;margin-top:6px;background:var(--ink);color:#fff;border:none;border-radius:9px;
+    padding:12px;font-size:14.5px;font-weight:600;cursor:pointer}
+  .auth-card .go:hover{background:var(--ink-2)}
+  .auth-remember{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin:2px 0 4px}
+  .auth-msg{min-height:18px;font-size:12.5px;margin-top:10px}
+  .auth-msg.bad{color:var(--red)} .auth-msg.good{color:var(--green)}
+  .auth-foot{margin-top:14px;font-size:11px;color:var(--muted-2);text-align:center;line-height:1.5}
+
+  .usertable{width:100%;border-collapse:collapse;margin-top:6px}
+  .usertable th,.usertable td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  .usertable th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .usertable td .mini{padding:4px 9px;font-size:12px}
+  .u-add{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 12px}
+  .u-add input,.u-add select{border:1px solid var(--line-strong);border-radius:7px;padding:8px 10px;font-size:13px;font-family:"IBM Plex Mono"}
+  .u-add input{flex:1;min-width:120px}
+  .logtable{width:100%;border-collapse:collapse;margin-top:6px}
+  .logtable th,.logtable td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .logtable th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .log-ok{color:var(--green);font-weight:600} .log-bad{color:var(--red);font-weight:600}
+  .subtabs{display:flex;gap:8px;margin-bottom:12px}
+  .subtab{padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}
+  .subtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  /* ---------- Modern refresh ---------- */
+  :root{ --accent:#2563eb; --accent-2:#0ea5e9; }
+  body{
+    background:
+      radial-gradient(1000px 520px at 100% -8%, #e7eefc 0%, rgba(231,238,252,0) 55%),
+      radial-gradient(900px 480px at -5% 0%, #e4f6ef 0%, rgba(228,246,239,0) 52%),
+      linear-gradient(180deg,#eef2f6 0%, #e8edf2 100%);
+  }
+  .topbar{ background:linear-gradient(100deg,#0d1b2a 0%, #15263c 52%, #163b53 100%); box-shadow:0 2px 16px rgba(13,27,42,.20); }
+  .num-chip{ background:linear-gradient(135deg,#1f3852 0%, #0ea5e9 100%) !important; color:#fff !important;
+    box-shadow:0 3px 10px rgba(14,165,233,.30); border:none !important; }
+  .card{ border-radius:16px; border:1px solid rgba(203,213,225,.75);
+    box-shadow:0 1px 2px rgba(13,27,42,.05), 0 12px 32px rgba(13,27,42,.07); }
+  .card:hover{ box-shadow:0 2px 6px rgba(13,27,42,.07), 0 18px 44px rgba(13,27,42,.12); }
+  .card-head{ border-bottom:1px solid rgba(219,225,232,.8); }
+  .card-head h2{ letter-spacing:.2px; }
+  .run{ background:linear-gradient(135deg,#0f7a4d 0%, #16a34a 100%) !important; border:none !important;
+    border-radius:13px !important; box-shadow:0 10px 24px rgba(15,122,77,.30); }
+  .run:hover{ filter:brightness(1.06); transform:translateY(-1px); }
+  .btn.dark{ background:linear-gradient(135deg,#0d1b2a 0%, #15263c 100%); border-color:#0d1b2a; }
+  .btn.green{ background:linear-gradient(135deg,#0f7a4d,#16a34a); border-color:#0f7a4d; }
+  .results-head h2{ letter-spacing:.2px; }
+  #resultsTable thead th{ background:linear-gradient(180deg,#f3f6f9,#eaeff4); }
+  .conf-badge{ box-shadow:0 1px 2px rgba(13,27,42,.06); }
+  .filechip{ border-radius:10px; }
+  input:focus, select:focus, textarea:focus{ outline-color:var(--accent) !important; }
+  .dropzone{ border-radius:14px; }
+  .dropzone.drag{ border-color:var(--accent); background:#eef4ff; }
+  /* ---------- Client master list ---------- */
+  .cmrow{display:grid;grid-template-columns:22px 1.6fr 1fr 1fr 24px;align-items:center;gap:8px;font-size:12.5px;
+    padding:6px 4px;border-bottom:1px dashed var(--line)}
+  .cmrow:last-child{border-bottom:none}
+  .cmrow.head{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);border-bottom:1px solid var(--line)}
+  .cmrow .idx{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted-2);text-align:right}
+  .cmrow .ac,.cmrow .pw{font-family:"IBM Plex Mono";font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmrow .none{color:var(--red);font-style:italic}
+  .cmrow .del{border:none;background:none;color:var(--muted-2);font-size:16px;padding:0 4px;line-height:1}
+  .cmrow .del:hover{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div id="authGate">
+  <div class="auth-card">
+    <div class="lock">🔒</div>
+    <h2 id="authTitle">Sign in</h2>
+    <p id="authSub">Enter your username and password to open the tool.</p>
+    <div class="auth-field"><label>Username</label><input type="text" id="authUser" autocomplete="username" autocapitalize="none" /></div>
+    <div class="auth-field"><label id="authPwLabel">Password</label><input type="password" id="authPass" autocomplete="current-password" /></div>
+    <div class="auth-field" id="authPass2Wrap" style="display:none"><label>Confirm new password</label><input type="password" id="authPass2" autocomplete="new-password" /></div>
+    <label class="auth-remember"><input type="checkbox" id="authRemember" checked /> Keep me signed in on this device</label>
+    <button class="go" id="authGo">Sign in</button>
+    <div class="auth-msg" id="authMsg"></div>
+    <div class="auth-foot">Access &amp; passwords are stored locally in this browser. This is an on-device gate, not server security.</div>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="eyebrow">Broker statement toolkit</span>
+      <h1>Contract Note Extractor</h1>
+      <p>Unlock password-protected contract notes and pull scrip, quantity, trade date and net rate (after brokerage) into one table.</p>
+    </div>
+    <div class="seal" title="All processing happens in your browser">
+      <svg viewBox="0 0 104 104" aria-hidden="true">
+        <defs><path id="ring" d="M52,52 m-40,0 a40,40 0 1,1 80,0 a40,40 0 1,1 -80,0"/></defs>
+        <circle cx="52" cy="52" r="50" fill="none" stroke="#2c5170" stroke-width="1"/>
+        <text font-family="IBM Plex Mono" font-size="8.2" letter-spacing="3" fill="#7fb79a">
+          <textPath href="#ring" startOffset="0%">· PROCESSED ON THIS DEVICE · NO UPLOAD · PRIVATE ·</textPath>
+        </text>
+      </svg>
+      <div class="seal-core"><div><b>ON<br>DEVICE</b><span>secure</span></div></div>
+    </div>
+    <div class="userbox" id="userBox" style="display:none">
+      <div class="who"><b id="whoName">—</b><span id="whoRole">user</span></div>
+      <button class="btn logout" id="usersLink" style="display:none">Users</button>
+      <button class="btn logout" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="grid" style="grid-template-columns:1fr">
+    <!-- PDFs -->
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num-chip">1</span> Contract notes</h2>
+        <span class="ct" id="pdfCount">0 files</span>
+      </div>
+      <div class="card-body">
+        <div class="drop" id="drop">
+          <div class="ic">📄</div>
+          <p>Drop your PDF contract notes here</p>
+          <small>Password-protected files are welcome — accepts .pdf only</small><br>
+          <button class="pick" id="pickPdf">Choose PDF files</button>
+          <input type="file" id="pdfInput" accept="application/pdf,.pdf" multiple hidden />
+        </div>
+        <div class="filechips" id="pdfChips"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" style="margin-top:20px;grid-template-columns:1fr" id="dataCardsGrid">
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num-chip">2</span> Client master (name · trading account · password)</h2>
+        <span class="ct" id="cmCount">0 clients</span>
+      </div>
+      <div class="card-body">
+        <div class="pw-import">
+          <button class="btn" id="importClients">Import .xlsx / .csv / .txt</button>
+          <button class="btn green" id="dlClients">Download updated master</button>
+          <button class="btn" id="clearClients">Clear saved master</button>
+          <input type="file" id="clientInput" accept=".txt,.xlsx,.xls,.csv" hidden />
+        </div>
+        <div class="hint">One file, three columns: <b>Client Name</b>, <b>Trading Account</b> and <b>Password</b>. Headers are recommended (e.g. <code>Client Name | Trading Account | Password</code>); extra password columns (<code>Password 1</code>, <code>Password 2</code>…) or the same name repeated on several rows are all collected.
+          <br>• <b>Password:</b> the client name is read from the <b>end of each PDF's file name</b> (the part after the last "_", e.g. <code>..._gayatri jain.pdf</code>) and every password listed for that name is tried; if none open the file it falls back to per‑file entry.
+          <br>• <b>Trading account:</b> matched to the client name printed in the contract note, allowing for missing middle names and reversed name order.
+          <br>Importing a new file <b>replaces</b> the saved master. Saved in this browser only — nothing is uploaded.</div>
+        <div class="collapse-h" id="cmToggle">
+          <span>Loaded clients <span id="cmToggleCount">(0)</span></span>
+          <span class="chev">›</span>
+        </div>
+        <div class="pwlist" id="cmList"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" style="margin-top:20px;grid-template-columns:1fr">
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num-chip">3</span> Output template</h2>
+        <span class="ct" id="tplState">not loaded</span>
+      </div>
+      <div class="card-body">
+        <div class="pw-import">
+          <button class="btn" id="importTpl">Upload Template.xlsx</button>
+          <input type="file" id="tplInput" accept=".xlsx" hidden />
+        </div>
+        <div class="tplfile" id="tplName"></div>
+        <div class="hint">Green headers are filled from the contract notes (Total STT is written as 0 on every row). Red headers are always left blank. Your template's colours, comments and date format are preserved exactly.</div>
+        <div class="setrow"><span>Trade Type</span>
+          <select class="sel" id="setTradeType"><option>Delivery</option><option>Intraday</option></select></div>
+        <div class="setrow"><span>Transaction Category</span>
+          <select class="sel" id="setCategory"><option>MARKET</option><option>OFF_MARKET</option></select></div>
+        <div class="setrow"><span>Market Price Per Share</span>
+          <select class="sel" id="setPrice">
+            <option value="net">Net rate (incl. brokerage)</option>
+            <option value="gross">Market rate (excl. brokerage)</option>
+          </select></div>
+        <div class="setrow"><span>Existing template rows</span>
+          <select class="sel" id="setKeep">
+            <option value="replace">Replace with new data</option>
+            <option value="keep">Keep and append below</option>
+          </select></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" style="margin-top:20px;grid-template-columns:1fr" id="adminGrid">
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num-chip">★</span> Users &amp; sign-in log</h2>
+        <span class="ct" id="userCount">1 user</span>
+      </div>
+      <div class="card-body">
+        <div class="subtabs">
+          <div class="subtab on" id="tabUsers">Users</div>
+          <div class="subtab" id="tabLog">Sign-in log</div>
+        </div>
+        <div id="usersPane">
+          <div class="u-add">
+            <input type="text" id="newUserName" placeholder="New username…" autocapitalize="none" autocomplete="off" />
+            <input type="password" id="newUserPass" placeholder="Password…" autocomplete="new-password" />
+            <select id="newUserRole"><option value="user">Normal user</option><option value="admin">Admin</option></select>
+            <button class="btn dark" id="addUserBtn">Add user</button>
+          </div>
+          <div class="hint">Admins manage users and the client master. Normal users can process files and export, but don't see the client master.</div>
+          <table class="usertable"><thead><tr><th>Username</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody id="userRows"></tbody></table>
+        </div>
+        <div id="logPane" style="display:none">
+          <div class="pw-import" style="margin-bottom:10px">
+            <button class="btn green" id="dlLog">Download log .xlsx</button>
+            <button class="btn" id="clearLog">Clear log</button>
+          </div>
+          <table class="logtable"><thead><tr><th>When</th><th>Username</th><th>Result</th></tr></thead>
+            <tbody id="logRows"></tbody></table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Action bar -->
+  <div class="actionbar">
+    <button class="run" id="runBtn">▶ Extract from all files</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-top"><span id="progLabel">Processing…</span><b id="progFrac">0 / 0</b></div>
+      <div class="bar"><span id="progBar"></span></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-head">
+    <h2>Extracted trades</h2>
+    <div class="exports">
+      <button class="btn dark" id="expTpl" disabled>Download filled template</button>
+      <button class="btn" id="expXlsx" disabled>Export Excel (.xlsx)</button>
+      <button class="btn" id="expCsv" disabled>Export CSV</button>
+      <button class="btn" id="clearResults" disabled title="Clear the extracted rows only — keeps your uploaded PDFs and passwords">Clear records</button>
+    </div>
+  </div>
+
+  <div class="lockbar" id="lockBar"></div>
+  <div class="blockbar" id="blockBar"></div>
+  <div class="warnbar" id="warnBar"></div>
+  <div class="tablewrap">
+    <div class="scroll">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th data-key="file">File / Status<span class="ar">↕</span></th>
+            <th data-key="client">Customer<span class="ar">↕</span></th>
+            <th data-key="scrip">Security / Scrip<span class="ar">↕</span></th>
+            <th data-key="side">B/S<span class="ar">↕</span></th>
+            <th data-key="qty" class="n">Net Qty<span class="ar">↕</span></th>
+            <th data-key="wap" class="n">WAP (incl. brokerage)<span class="ar">↕</span></th>
+            <th data-key="tradeDate">Trade Date<span class="ar">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody">
+          <tr><td colspan="7">
+            <div class="empty-state">
+              <div class="ic">🧾</div>
+              <p>Add contract notes and passwords, then run the extractor. Results land here.</p>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b>100% on-device.</b> Your PDFs, passwords and extracted data never leave this browser tab.<br>
+    Extraction is heuristic across broker formats — always spot-check WAP and quantity against the original note.
+  </div>
+</div>
+
+<!-- ---------- Password-failure modal ---------- -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <div class="modal-lock">🔒</div>
+      <div>
+        <h3 id="modalTitle">Some files stayed locked</h3>
+        <p>None of your saved passwords opened these. Enter the right one to unlock and extract now.</p>
+      </div>
+    </div>
+    <div class="modal-body" id="failList"></div>
+    <div class="modal-foot">
+      <span class="note">Dismissing leaves these marked <b>🔒 Password failed</b> in the table.</span>
+      <button class="btn" id="closeModal">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="overlay" id="inspectOverlay">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="inspTitle">
+    <div class="modal-head">
+      <div class="modal-lock" style="background:var(--surface-2);border-color:var(--line)">🔍</div>
+      <div>
+        <h3 id="inspTitle">Text layer</h3>
+        <p>This is exactly what the extractor reads from the PDF. Nothing here leaves your browser.</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <p class="diagline" id="diagSummary"></p>
+      <pre class="dump" id="dumpBox"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="copyDump">Copy text layer</button>
+      <button class="btn dark" id="closeInspect">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="acctOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="acctTitle">
+    <div class="modal-head">
+      <div class="modal-lock">🏦</div>
+      <div>
+        <h3 id="acctTitle">Trading account needed</h3>
+        <p>These client names had no confident match in your master file. Add the account number to continue.</p>
+      </div>
+    </div>
+    <div class="modal-body" id="acctList"></div>
+    <div class="modal-foot">
+      <span class="note">Anything left blank stays empty in the Trading Account column.</span>
+      <button class="btn" id="closeAcct">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="priceOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="priceTitle">
+    <div class="modal-head">
+      <div class="modal-lock">₹</div>
+      <div>
+        <h3 id="priceTitle">Price could not be verified</h3>
+        <p>No brokerage figure was found for these rows, so the after-brokerage rate cannot be proven. They are held back from the template until you confirm.</p>
+      </div>
+    </div>
+    <div class="modal-body" id="priceList"></div>
+    <div class="modal-foot">
+      <span class="note">Unconfirmed rows stay out of the filled template.</span>
+      <button class="btn" id="closePrice">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<script>
+/* ================= State ================= */
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const state = {
+  pdfs: [], passwords: [], results: [], master: [], passwordBook: [], template: null, templateName: "",
+  settings: { tradeType:"Delivery", category:"MARKET", price:"net", keep:"replace" },
+  sort: { key: null, dir: 1 },
+};
+let idSeq = 1;
+
+const $ = s => document.querySelector(s);
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+const fmtSize = b => b < 1024 ? b + " B" : b < 1048576 ? (b/1024).toFixed(1) + " KB" : (b/1048576).toFixed(1) + " MB";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("on"), 2600);
+}
+
+/* ================= PDF intake ================= */
+const drop = $("#drop"), pdfInput = $("#pdfInput");
+$("#pickPdf").onclick = () => pdfInput.click();
+pdfInput.onchange = e => { addPdfs(e.target.files); pdfInput.value = ""; };
+
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); if (ev==="drop"||e.target===drop) drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => { if (e.dataTransfer?.files) addPdfs(e.dataTransfer.files); });
+
+async function addPdfs(fileList){
+  const files = [...fileList].filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+  if (!files.length){ toast("Only PDF files are accepted."); return; }
+  for (const f of files){
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    state.pdfs.push({ id: idSeq++, name: f.name, size: f.size, bytes });
+  }
+  renderPdfChips();
+  savePdfs();
+}
+
+function renderPdfChips(){
+  const box = $("#pdfChips"); box.innerHTML = "";
+  state.pdfs.forEach(p => {
+    const chip = el("div","filechip");
+    chip.append(el("span",null,"📄"),
+      Object.assign(el("span","nm"), { textContent: p.name }),
+      Object.assign(el("span","sz"), { textContent: fmtSize(p.size) }));
+    const rm = el("button","rm","×"); rm.title = "Remove";
+    rm.onclick = () => { state.pdfs = state.pdfs.filter(x => x.id !== p.id); renderPdfChips(); savePdfs(); };
+    chip.append(rm); box.append(chip);
+  });
+  $("#pdfCount").textContent = state.pdfs.length + (state.pdfs.length===1?" file":" files");
+}
+
+/* (Password list module removed — passwords now come from the client master
+   by file name; per-file manual unlock still available for locked files.) */
+
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ================= Unlocking ================= */
+async function openPdf(bytes, passwords){
+  const candidates = [""].concat(passwords.filter(Boolean));
+  for (const pw of candidates){
+    try{
+      const doc = await pdfjsLib.getDocument({ data: bytes.slice(0), password: pw }).promise;
+      return { doc, password: pw };
+    } catch(e){
+      if (e && (e.name === "PasswordException" || /password/i.test(e.message||""))) continue;
+      throw e;
+    }
+  }
+  return null;
+}
+
+/* ================= Table engine v2 ================= */
+const num = s => {
+  if (s == null) return NaN;
+  let t = String(s).trim();
+  if (!t) return NaN;
+  const neg = /^\(.*\)$/.test(t) || /(^|\s)(dr|-)$/i.test(t);
+  t = t.replace(/[(),₹\s]/g,"").replace(/(cr|dr)$/i,"").replace(/[^0-9.\-]/g,"");
+  if (!/[0-9]/.test(t)) return NaN;
+  const v = parseFloat(t);
+  return isNaN(v) ? NaN : (neg ? -Math.abs(v) : v);
+};
+const ISIN_RE = /\b(IN[EFDN][0-9A-Z]{9})\b/;
+
+function pageLines(tc){
+  const items = tc.items.filter(it => it.str && it.str.trim() !== "").map(it => {
+    const h = Math.abs(it.height) || Math.abs(it.transform[3]) || 8;
+    return { str: it.str.replace(/−/g,"-").replace(/\s+/g," ").trim(), x: it.transform[4], y: it.transform[5],
+             w: it.width || it.str.length * h * 0.5, h };
+  });
+  if (!items.length) return [];
+  const med = items.map(i=>i.h).sort((a,b)=>a-b)[Math.floor(items.length/2)] || 8;
+  const tol = Math.max(2.5, med * 0.55);
+  items.sort((a,b)=> b.y - a.y || a.x - b.x);
+  const lines = [];
+  for (const it of items){
+    let ln = lines.find(l => Math.abs(l.y - it.y) <= tol);
+    if (!ln){ ln = { y: it.y, parts: [] }; lines.push(ln); }
+    ln.parts.push(it);
+  }
+  lines.forEach(l => l.parts.sort((a,b)=>a.x-b.x));
+  lines.sort((a,b)=> b.y - a.y);
+  return lines.map(l => ({
+    y: l.y, parts: l.parts,
+    text: l.parts.map(p=>p.str).join(" ").replace(/\s+/g," ").trim(),
+    cells: buildCells(l.parts),
+  }));
+}
+
+const NUMTOK = /^[₹(\-]*[\d,]+(\.\d+)?[)%]*$/;
+function buildCells(parts){
+  const cells = []; let cur = null, prevStr = "";
+  for (const p of parts){
+    const cw = p.w / Math.max(p.str.length, 1);
+    // Two numbers side by side are always separate columns in a table, so they
+    // need a far smaller gap before we treat them as one cell. Without this,
+    // tightly spaced numeric columns silently fuse into a single unusable value.
+    const bothNum = NUMTOK.test(prevStr.trim()) && NUMTOK.test(p.str.trim());
+    const gap = bothNum ? Math.max(1.2, cw * 0.35) : Math.max(4.5, cw * 2.2);
+    if (cur && (p.x - cur.x1) < gap){
+      cur.text += (p.x - cur.x1 > cw*0.4 ? " " : "") + p.str;
+      cur.x1 = Math.max(cur.x1, p.x + p.w);
+    } else { cur = { text:p.str, x0:p.x, x1:p.x+p.w }; cells.push(cur); }
+    prevStr = p.str;
+  }
+  cells.forEach(c => { c.text = c.text.replace(/\s+/g," ").trim(); c.cx = (c.x0+c.x1)/2; });
+  return cells;
+}
+
+const HK = {
+  name:     /(security|scrip|contract\s*descrip|description|company|symbol|instrument|particular|stock)/i,
+  side:     /(b\s*\/\s*s|buy\s*\(?b?\)?\s*\/\s*sell|buy\s*\/\s*sell|\bbuy\b|\bsell\b|trade\s*type|type\s*of\s*trade)/i,
+  qty:      /(qty|quantity|no\.?\s*of\s*(shares|units))/i,
+  netRate:  /(net\s*rate|net\s*price|effective\s*rate|(rate|wap|price)[^|]*?(after|incl(uding)?)\s*brokerage|after\s*brokerage)/i,
+  brok:     /(brokerage|brk)/i,
+  netTotal: /(net\s*total|net\s*amount|net\s*value|amount.*(payable|receivable))/i,
+  rate:     /(\brate\b|\bprice\b|wap|weighted\s*average)/i,
+};
+const HAS_UNIT = /(per\s*unit|\/\s*unit|per\s*share)/i;
+
+function clusterCells(groups){
+  const flat = [];
+  groups.forEach((cells, gi) => cells.forEach(c => flat.push({ ...c, gi })));
+  flat.sort((a,b)=>a.x0-b.x0);
+  const cols = [];
+  for (const c of flat){
+    const hit = cols.find(k => Math.min(k.x1,c.x1) - Math.max(k.x0,c.x0) > -6);
+    if (hit){ hit.pieces.push(c); hit.x0 = Math.min(hit.x0,c.x0); hit.x1 = Math.max(hit.x1,c.x1); }
+    else cols.push({ x0:c.x0, x1:c.x1, pieces:[c] });
+  }
+  cols.forEach(k => {
+    k.pieces.sort((a,b)=>a.gi-b.gi || a.x0-b.x0);
+    k.text = k.pieces.map(p=>p.text).join(" ").replace(/\s+/g," ").trim();
+    k.cx = (k.x0+k.x1)/2;
+  });
+  return cols.sort((a,b)=>a.x0-b.x0);
+}
+
+function isNumberFree(line){
+  return !line.cells.some(c => /^[\s\d.,()\-₹%]+$/.test(c.text) && !isNaN(num(c.text)));
+}
+
+function findHeader(lines, from = 0){
+  for (let i = from; i < lines.length; i++){
+    if (!isNumberFree(lines[i])) continue;
+    const base = lines[i].cells;
+    const isLabelRow = ln => {
+      if (ln.cells.length < 2 || ISIN_RE.test(ln.text)) return false;
+      const aligned = ln.cells.filter(c => base.some(b => Math.min(b.x1,c.x1) - Math.max(b.x0,c.x0) > -8)).length;
+      return aligned / ln.cells.length >= 0.6;
+    };
+    let maxSpan = 1;
+    while (maxSpan < 3 && i + maxSpan < lines.length &&
+           isNumberFree(lines[i+maxSpan]) && isLabelRow(lines[i+maxSpan])) maxSpan++;
+    for (let span = maxSpan; span >= 1; span--){
+      const cols = clusterCells(lines.slice(i, i+span).map(l => l.cells));
+      const joined = cols.map(c=>c.text).join(" | ");
+      if (HK.name.test(joined) && HK.qty.test(joined) &&
+          (HK.netRate.test(joined) || HK.rate.test(joined) || HK.netTotal.test(joined)))
+        return { start:i, end:i+span-1, cols, joined };
+    }
+  }
+  return null;
+}
+
+function roleColumns(cols){
+  const roles = {};
+  const claim = (key, test, pref) => {
+    if (roles[key] != null) return;
+    let best = -1, bestScore = -1;
+    cols.forEach((c,i) => {
+      if (Object.values(roles).includes(i)) return;
+      if (!test.test(c.text)) return;
+      let s = 1;
+      if (pref && pref.test(c.text)) s += 2;
+      if (HAS_UNIT.test(c.text)) s += 1;
+      if (s > bestScore){ bestScore = s; best = i; }
+    });
+    if (best >= 0) roles[key] = best;
+  };
+  claim("name", HK.name); claim("qty", HK.qty); claim("netRate", HK.netRate);
+  claim("brok", HK.brok, HAS_UNIT); claim("netTotal", HK.netTotal);
+  claim("rate", HK.rate); claim("side", HK.side);
+  return roles;
+}
+
+function rowCells(line, cols){
+  const bounds = [];
+  for (let i=0;i<cols.length-1;i++) bounds.push((cols[i].cx + cols[i+1].cx)/2);
+  const out = cols.map(()=>[]);
+  for (const c of line.cells){
+    let idx = 0;
+    while (idx < bounds.length && c.cx > bounds[idx]) idx++;
+    out[idx].push(c.text);
+  }
+  return out.map(a => a.join(" ").trim());
+}
+
+const STRONG_STOP = /(authoris|authoriz)ed\s*signator|compliance\s*officer|this\s*is\s*a\s*(computer|system)\s*generated|terms\s*(and|&)\s*conditions|investor\s*griev/i;
+const WEAK_SKIP = /^(total|grand\s*total|net\s*total|sub[\s-]*total|nse|bse|msei|equity|cash|f&o|segment|exchange|settlement|charges|taxable|igst|cgst|sgst|utgst|stt|sebi|stamp|gst|turnover|clearing|transaction|securities\s*transaction|net\s*amount|closing\s*balance|carried)/i;
+
+/* Numeric tokens straight from the text items, re-joining only fragments of a
+   single number (e.g. "1," + "234.56") which sit essentially flush together. */
+function numericTokens(parts){
+  const merged = []; let cur = null;
+  for (const p of parts){
+    const s = p.str.trim();
+    if (cur && (p.x - cur.x1) < 1.2 && NUMTOK.test(cur.text) && NUMTOK.test(s)){
+      cur.text += s; cur.x1 = p.x + p.w;
+    } else { cur = { text:s, x0:p.x, x1:p.x+p.w }; merged.push(cur); }
+  }
+  return merged.map(m => ({ v: num(m.text), cx: (m.x0+m.x1)/2, raw:m.text }))
+               .filter(o => !isNaN(o.v) && NUMTOK.test(o.raw));
+}
+
+/* A scrip name is a short label. Anything that looks like body text, a footer
+   or a new section is not part of it — this is the last line of defence
+   regardless of which parser produced the name. */
+/* An ISIN can wrap across lines in narrow tables (e.g. "INE00FF" then "01025").
+   Recover it by testing the de-spaced text, then formatting the scrip name so
+   the ISIN fragments are removed from it. */
+function recoverISIN(text){
+  if (!text) return "";
+  const direct = text.match(ISIN_RE);
+  if (direct) return direct[1];
+  const squashed = text.replace(/\s+/g, "");
+  const m = squashed.match(ISIN_RE);
+  if (m) return m[1];
+  // Fragments can be separated by the scrip name, e.g. tokens
+  // ["INE00FF", "ACUTAAS", "CHEMICALS", "LIMITED-AM", "IORGEQ", "01025"].
+  // A valid ISIN is 12 chars: IN[E/F/D/N] + 9 alphanumerics, ending in digits.
+  // Join the ISIN-head fragment directly to the trailing numeric fragment.
+  const toks = String(text).toUpperCase().split(/\s+/).filter(Boolean);
+  const headIdx = toks.findIndex(t => /^IN[EFDN][0-9A-Z]{0,8}$/.test(t) && t.length < 12);
+  if (headIdx >= 0){
+    const head = toks[headIdx];
+    for (let j = toks.length - 1; j > headIdx; j--){
+      const t = toks[j].replace(/[^0-9A-Z]/g, "");
+      if (!/^[0-9]/.test(t) && !/[0-9]$/.test(t)) continue;   // ISIN tail ends in digits
+      const cand = (head + t).slice(0, 12);
+      if (cand.length === 12 && ISIN_RE.test(cand)) return cand;
+    }
+  }
+  return "";
+}
+function stripISIN(text, isin){
+  let t = String(text || "");
+  if (isin){
+    t = t.replace(ISIN_RE, " ");                       // whole ISIN on one run
+    const spaced = isin.split("").join("\\s*");
+    t = t.replace(new RegExp(spaced, "g"), " ");       // ISIN split by spaces
+    // ISIN split into a head fragment and a tail fragment by the scrip name:
+    // drop any whole token that is a strict prefix or suffix of the ISIN code.
+    t = t.split(/\s+/).filter(tok => {
+      const u = tok.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+      if (u.length >= 3 && /[0-9]/.test(u) &&
+          (isin.startsWith(u) || isin.endsWith(u))) return false;
+      return true;
+    }).join(" ");
+  }
+  return t.replace(/\s+/g, " ").trim();
+}
+
+const NAME_JUNK = /\s*(\*|\bexchange[-\s]wise\b|\bobligation details\b|\bpage no\b|\bask us\b|\bfollow us\b|\btoll free\b|\boriginal to recipient\b|\bcontract note\b|\btransactions? charges\b|\bannexure\b|\bscrip\s?wise\b|\bsub total\b|\bnet amount\b|\bdisclaimer\b|\bterms\b).*$/i;
+function cleanScrip(s){
+  let t = String(s || "").replace(/\s+/g," ").trim();
+  t = t.replace(NAME_JUNK, "").trim();
+  t = t.replace(/[,;:]+$/,"").trim();
+  if (t.length > 60) t = t.slice(0,60).replace(/\s+\S*$/,"").trim();
+  return t;
+}
+
+/* ---- Arithmetic identification of the after-brokerage rate.
+   Header wording varies by broker and can be wrapped, split or mangled, so the
+   rate is identified from the numbers instead. For any trade row the net rate
+   is the only value satisfying
+       net = gross ± brokerage/share        (brokerage lifts a buy, cuts a sell)
+   and, whenever the row carries a value column,
+       qty × net = total value.
+   Two independent equations make a false positive vanishingly unlikely, and a
+   row is only accepted when it is ambiguity-free. ---- */
+function extractByArithmetic(lines){
+  // Many notes (Religare, Kotak, Axis) contain BOTH an ISIN/scrip summary that
+  // rolls every trade up per security AND a detailed per-trade annexure below.
+  // The summary is the authoritative per-security total (summed quantity and the
+  // brokerage-inclusive average rate). If a summary section is present, restrict
+  // extraction to it so we don't also count the annexure and double the quantity.
+  const SUMMARY_START = /(equity\s*segment\s*summary|scrip\s*wise\s*summary|net\s*obligation\s*for\s*isin|security\s*description)/i;
+  const ANNEXURE_START = /(\bannexure\b|exchange[-\s]*wise\s*details|order\s*no\.?\s*order\s*time|order\s+order\s+trade\s+trade|gross\s*rate\s*\/\s*(?:gross|trade)|\bcl\.\s*book\s*type\b|security\s*\/?\s*contract\s*description|buy\s*\(\s*b\s*\)\s*\/?\s*sell\s*\(\s*s\s*\)|scrip\s*wise\s*summary\s*is\s*enclosed|^\s*exch\s+order)/i;
+  const DATE_RE = /(\d{1,2}[\-\/\.](?:\d{1,2}|[A-Za-z]{3,9})[\-\/\.]\d{2,4}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{2,4})/;
+
+  // A single PDF may bundle several contract notes (e.g. a week of Zerodha notes),
+  // each with its own summary, annexure and trade date. Index every "Trade Date"
+  // so each summary region can be tagged with the date of its own note.
+  const dateAt = [];
+  for (let i=0;i<lines.length;i++){
+    const m = lines[i].text.match(new RegExp("trade\\s*date\\s*[:\\-]?\\s*"+DATE_RE.source,"i"));
+    if (m) dateAt.push({ idx:i, date:m[1] });
+  }
+  const dateForRegion = start => {
+    let best = ""; for (const d of dateAt){ if (d.idx <= start) best = d.date; else break; } return best;
+  };
+
+  // Collect EVERY summary region: SUMMARY_START .. next ANNEXURE_START. This reads
+  // all notes in the file (not just the first) while still excluding each note's
+  // per-order annexure.
+  const regions = [];
+  let p = 0;
+  while (p < lines.length){
+    if (SUMMARY_START.test(lines[p].text)){
+      let end = lines.length;
+      for (let j=p+1;j<lines.length;j++){ if (ANNEXURE_START.test(lines[j].text)){ end=j; break; } }
+      const region = lines.slice(p, end);
+      if (region.some(l => ISIN_RE.test(l.text))) regions.push({ region, date: dateForRegion(p) });
+      p = Math.max(end, p+1);
+    } else p++;
+  }
+  const scopedList = regions.length ? regions : [{ region: lines, date: "" }];
+
+  let trades = [];
+  for (const { region, date } of scopedList){
+    const t = extractArithmeticFrom(region);
+    if (t) for (const x of t){ if (date) x.tradeDate = date; trades.push(x); }
+  }
+
+  // ISIN backfill safety net: build a scrip-name -> ISIN map from the ENTIRE
+  // document (the annexure lists "<NAME> ... ISIN : INExxxx"), then fill any
+  // trade whose ISIN came back empty by matching its scrip name. This covers
+  // scrips whose ISIN wraps or sits on a separate line in some layouts.
+  if (trades && trades.some(t => !t.isin)){
+    const nameToIsin = buildNameIsinMap(lines);
+    trades.forEach(t => {
+      if (!t.isin){
+        const key = normNameKey(t.scrip);
+        for (const [nm, iso] of nameToIsin){
+          if (nm.startsWith(key) || key.startsWith(nm)){ t.isin = iso; break; }
+        }
+      }
+    });
+  }
+  // Equity-summary only: a real trade row always carries an ISIN. Rows that still
+  // have none after backfill are charges / tax / levy lines (e.g. a DP Charges
+  // Statement's "CDSL DP Charges", or GST/STT/stamp rows) that merely happen to
+  // satisfy value = charges + IGST — never stock. Drop them.
+  let kept = trades ? trades.filter(t => t.isin) : trades;
+
+  // Same-trade safety net: if a note prints BOTH a per-ISIN summary row and a
+  // per-order detail block (e.g. Kotak), the same trade can surface twice with
+  // slightly different names ("ZOTA HEALTH CA" vs "ZOTA HEALTH CARE LIM"). Collapse
+  // only TRUE duplicates — identical ISIN, side, quantity, WAP AND trade date — so
+  // the same scrip traded on different days across bundled notes is NOT merged.
+  if (kept && kept.length > 1){
+    const byKey = new Map();
+    for (const t of kept){
+      const k = [t.isin||"", t.side||"", t.qty, Math.round((t.wap||0)*100), t.tradeDate||""].join("|");
+      const prev = byKey.get(k);
+      if (!prev){ byKey.set(k, t); continue; }
+      const better = (t.fills||1) !== (prev.fills||1)
+        ? ((t.fills||1) < (prev.fills||1) ? t : prev)
+        : ((t.scrip||"").length > (prev.scrip||"").length ? t : prev);
+      byKey.set(k, better);
+    }
+    kept = [...byKey.values()];
+  }
+  return kept;
+}
+
+// Map normalized scrip name -> ISIN using every "ISIN : INExxxx" occurrence and
+// the security name on the same or preceding line.
+function buildNameIsinMap(lines){
+  const map = new Map();
+  for (let i=0;i<lines.length;i++){
+    const m = lines[i].text.match(/\bISIN\s*[:\-]?\s*(IN[EFDN][0-9A-Z]{9})/i) || lines[i].text.match(ISIN_RE);
+    if (!m) continue;
+    const iso = m[1];
+    // security name: strip the ISIN part from this line, else look one line up
+    let nm = lines[i].text.replace(/\bISIN\s*[:\-]?\s*/i," ").replace(ISIN_RE," ")
+                          .replace(/\b(NSE|BSE|MCX|B|S)\b/g," ")
+                          .replace(/[\d,.:]/g," ").replace(/\s+/g," ").trim();
+    if (nm.replace(/[^A-Za-z]/g,"").length < 4 && i>0){
+      nm = lines[i-1].text.replace(ISIN_RE," ").replace(/\b(NSE|BSE|MCX|B|S)\b/g," ")
+                          .replace(/[\d,.:]/g," ").replace(/\s+/g," ").trim();
+    }
+    const key = normNameKey(nm);
+    if (key.length >= 4 && !map.has(key)) map.set(key, iso);
+  }
+  return map;
+}
+const normNameKey = s => String(s||"").toUpperCase().replace(/\b(LIMITED|LTD|FV1|EQ|LI|L)\b/g,"")
+  .replace(/[^A-Z]/g,"").slice(0,12);
+
+function extractArithmeticFrom(lines){
+  const buyX = [], sellX = [];
+  lines.forEach(l => l.cells.forEach(c => {
+    const t = c.text.trim();
+    if (/^buy$/i.test(t)) buyX.push(c.cx);
+    if (/^sell$/i.test(t)) sellX.push(c.cx);
+  }));
+
+  const raw = []; let last = null, lastY = 0, lastNameX = 0, lastIsinX = 0, contCount = 0;
+  for (const line of lines){
+    let toks = numericTokens(line.parts);
+    if (toks.length < 3)
+      toks = line.cells.map(c => ({ v: num(c.text), cx: c.cx, raw: c.text }))
+                       .filter(o => !isNaN(o.v) && NUMTOK.test(String(o.raw).trim()));
+
+    const isinM = line.text.match(ISIN_RE);
+    // Build the scrip name from alphabetic words only, dropping tokens that are
+    // clearly not part of a security name: exchange codes (NSE/BSE/MCX...),
+    // times (11:30:44), the B/S flag, and bare numbers. This keeps per-trade
+    // rows (Kotak etc.) clean while still allowing ISIN fragments through.
+    const EXCH = /^(nse|bse|mcx|ncdx|msei|ncl|cds|cm|fo|f&o|nsef|nsec|bsec|bsef|bsem|nsem|ncx|equity|cash|t1|t2)$/i;
+    const TIMEISH = /^\d{1,2}:\d{2}(:\d{2})?$/;
+    const nameParts = line.parts.map(p => p.str)
+      .map(s => s.trim())
+      .filter(s => s && !NUMTOK.test(s) && !TIMEISH.test(s) && !EXCH.test(s) &&
+                   !/^(b|s|buy|sell|b\s*\/\s*s|purchase|sale)$/i.test(s));
+    const nameTxt = nameParts.join(" ").replace(/\s+/g," ").trim();
+    // an ISIN body fragment: alphanumerics that are part of a code, e.g. "01025" or "INE00FF"
+    const isFragment = s => /^[A-Z0-9]{2,10}$/i.test(s) && /[0-9]/.test(s);
+
+    if (toks.length < 3){
+      // A genuine wrapped continuation: vertically adjacent to the row, short,
+      // left of the numeric block, and made of name text and/or ISIN fragments.
+      // The first token may sit under the ISIN column OR the name column, since
+      // a wrapped ISIN tail (e.g. "01025") aligns under ISIN, not the name.
+      // Such a tail parses as a number, so allow at most one short numeric token
+      // when it sits in the ISIN column and looks like ISIN body characters.
+      const lh = (line.parts[0] && line.parts[0].h) || 8;
+      const firstX = line.parts.length ? line.parts[0].x : 1e9;
+      const isinTail = toks.length === 1 &&
+        Math.abs(toks[0].cx - lastIsinX) <= 40 &&
+        /^[0-9A-Z]{2,9}$/i.test(String(toks[0].raw).trim());
+      // full continuation text: a wrapped name tail, or an "ISIN <code>" line.
+      const contText = line.parts.map(p => p.str.trim())
+        .filter(s => s && !/^(b|s|buy|sell|purchase|sale)$/i.test(s))
+        .join(" ").replace(/\s+/g," ").replace(/\bISIN\b\s*/i," ").trim();
+      const hasISIN = ISIN_RE.test(line.text) || ISIN_RE.test(line.text.replace(/\s+/g,""));
+      const looksName = /[A-Za-z]{2,}/.test(contText) || isFragment(contText) || hasISIN;
+      const aligned = Math.abs(firstX - lastNameX) <= 25 || Math.abs(firstX - lastIsinX) <= 40 || hasISIN;
+      const ok = last && contCount < 4 && (toks.length === 0 || isinTail || hasISIN) &&
+                 contText && looksName && contText.length <= 40 &&
+                 (lastY - line.y) <= lh * 2.6 && (lastY - line.y) >= 0 &&
+                 aligned && !NAME_JUNK.test(" " + contText);
+      if (ok){
+        last.forEach(t => { t.name = (t.name + " " + contText).replace(/\s+/g," ").trim(); });
+        contCount++; lastY = line.y;
+      } else last = null;
+      continue;
+    }
+
+    const n = toks.map(o => o.v), xs = toks.map(o => o.cx);
+    const blocks = []; let i = 1;
+    while (i <= n.length - 3){
+      const q = n[i-1], g = n[i], b = n[i+1], net = n[i+2];
+      const tol = Math.max(0.02, Math.abs(g) * 3e-5);
+      const add = Math.abs((g + b) - net) <= tol;
+      const sub = Math.abs((g - b) - net) <= tol;
+      if (g > 0 && b >= 0 && q !== 0 && Number.isInteger(q) && (add || sub) && net > 0){
+        const qa = Math.abs(q);   // some brokers (e.g. Groww) sign the sell qty
+        const tv = n[i+3];
+        // Some brokers (e.g. Anand Rathi) print the "Total BUY/SELL Value after
+        // brokerage" as a signed obligation — a BUY shows a NEGATIVE value
+        // (money out). Verify on magnitude so the sign convention doesn't reject
+        // an otherwise valid row.
+        const valOK = (tv == null || tv === 0) ? null
+                    : Math.abs(Math.abs(tv) - qa * net) <= Math.max(0.75, qa * net * 2e-4);
+        if (valOK !== false){
+          blocks.push({ q: qa, g, b, net, x: xs[i-1], add, sub, verified: valOK === true, neg: q < 0 });
+          i += 4; continue;
+        }
+      }
+      i++;
+    }
+    if (!blocks.length) continue;
+
+    const made = blocks.map((bl,k) => {
+      let side;
+      if (bl.b > 0) side = bl.add ? "Buy" : "Sell";
+      else if (bl.neg) side = "Sell";            // signed negative qty = sell (e.g. Groww)
+      else if (buyX.length || sellX.length){
+        const db = buyX.length  ? Math.min(...buyX.map(x => Math.abs(x - bl.x)))  : Infinity;
+        const ds = sellX.length ? Math.min(...sellX.map(x => Math.abs(x - bl.x))) : Infinity;
+        side = ds < db ? "Sell" : "Buy";
+      } else side = k === 0 ? "Buy" : "Sell";
+      return { name: nameTxt || (isinM ? isinM[1] : ""), isin: isinM ? isinM[1] : "",
+               side, qty: bl.q, rate: bl.net, gross: bl.g,
+               conf: bl.verified ? "verified" : "computed" };
+    }).filter(t => t.name);
+    if (made.length){
+      raw.push(...made); last = made; contCount = 0; lastY = line.y;
+      const nameP = line.parts.find(p => !NUMTOK.test(p.str.trim()) && !ISIN_RE.test(p.str));
+      lastNameX = nameP ? nameP.x : (line.parts[0] ? line.parts[0].x : 0);
+      lastIsinX = line.parts.length ? line.parts[0].x : 0;   // leftmost = ISIN column
+    }
+  }
+  if (!raw.length) return null;
+
+  // aggregate per scrip+side so multi-fill notes collapse correctly.
+  // Key on the ISIN-stripped, cleaned name so an ISIN that appears on only one
+  // fill's continuation line doesn't split the group.
+  const agg = new Map();
+  raw.forEach(r => {
+    const iso = r.isin || recoverISIN(r.name);
+    const cleanNm = cleanScrip(stripISIN(r.name, iso));
+    const k = cleanNm + "||" + r.side;
+    if (!agg.has(k)) agg.set(k, { name: cleanNm, isin: iso, side: r.side, qty:0, notional:0, grossNotional:0, fills:0, conf:r.conf });
+    const a = agg.get(k);
+    a.qty += r.qty; a.notional += r.qty * r.rate; a.grossNotional += r.qty * r.gross; a.fills++;
+    if (!a.isin && iso) a.isin = iso;
+    if (r.conf === "computed") a.conf = "computed";
+  });
+  const out2 = [...agg.values()].map(a => {
+    return {
+    scrip: a.name, isin: a.isin, side: a.side, qty: a.qty,
+    wap: Math.round((a.notional / a.qty) * 1e4) / 1e4,
+    gross: Math.round((a.grossNotional / a.qty) * 1e4) / 1e4,
+    basis: a.conf === "verified" ? "After brokerage ✓ verified" : "After brokerage (computed)",
+    conf: a.conf, fills: a.fills,
+  }; });
+
+  // Some notes (Kotak) print BOTH a scrip-wise summary row and the individual
+  // per-trade rows for the same ISIN. Both aggregate to the same quantity, so
+  // keeping both double-counts. Collapse duplicates on ISIN+side (or name+side
+  // when ISIN is absent), preferring the entry with the fuller scrip name and
+  // the higher fill count (the detailed per-trade rows).
+  const seen = new Map();
+  for (const t of out2){
+    const key = (t.isin || t.scrip.replace(/\s+/g,"").toUpperCase()) + "||" + t.side;
+    const prev = seen.get(key);
+    if (!prev){ seen.set(key, t); continue; }
+    // same trade seen twice — quantities should match; keep the better-named one
+    const better = (t.scrip.length > prev.scrip.length) || (t.fills > prev.fills) ? t : prev;
+    // guard: if quantities differ, they are genuinely different trades → keep both
+    if (Math.abs(t.qty - prev.qty) > 0.5){ seen.set(key + "#" + t.qty, t); continue; }
+    seen.set(key, better);
+  }
+  return [...seen.values()];
+}
+
+/* ---- ISIN-summary layout (Axis and similar): one row per ISIN with a BUY
+   block and a SELL block. Each block has a gross WAP, brokerage per share and
+   a "WAP after brokerage" column — we read the AFTER-brokerage one only. ---- */
+const AFTER_BROK = /after\s*brokerage/i;
+const IS_WAP     = /\bwap\b/i;
+const IS_VALUE   = /(total\s+(buy|sell)\s+value|value\s+after\s+brokerage|obligation)/i;
+
+function findSummaryHeader(lines){
+  for (let i=0;i<lines.length;i++){
+    if (!isNumberFree(lines[i])) continue;
+    let span = 1;
+    while (i+span < lines.length && span < 22 &&
+           isNumberFree(lines[i+span]) && !ISIN_RE.test(lines[i+span].text)) span++;
+    if (span < 3) continue;
+    for (let s=span; s>=3; s--){
+      const cols = clusterCells(lines.slice(i,i+s).map(l=>l.cells));
+      const joined = cols.map(c=>c.text).join(" | ");
+      const afterCount = cols.filter(c => AFTER_BROK.test(c.text) && IS_WAP.test(c.text) && !IS_VALUE.test(c.text)).length;
+      if (/isin/i.test(joined) && /brokerage/i.test(joined) && afterCount >= 1 && cols.length >= 6)
+        return { start:i, end:i+s-1, cols, joined };
+    }
+  }
+  return null;
+}
+
+function summaryRoles(cols){
+  const R = { isin:-1, name:-1, qty:[], wapNet:[], wapGross:[], brok:[], netQty:-1 };
+  cols.forEach((c,i) => {
+    const t = c.text;
+    if (R.isin<0 && /\bisin\b/i.test(t) && !/obligation/i.test(t)){ R.isin = i; return; }
+    if (R.name<0 && /(security|symbol|scrip)/i.test(t)){ R.name = i; return; }
+    if (/net\s*quantity/i.test(t)){ R.netQty = i; return; }
+    if (/obligation/i.test(t)) return;
+    if (/quantity/i.test(t)){ R.qty.push(i); return; }
+    if (/brokerage\s*per\s*share/i.test(t)){ R.brok.push(i); return; }
+    if (IS_WAP.test(t) && !IS_VALUE.test(t)) (AFTER_BROK.test(t) ? R.wapNet : R.wapGross).push(i);
+  });
+  return R;
+}
+
+function extractSummary(lines, head){
+  const cols = head.cols, R = summaryRoles(cols);
+  if (!R.qty.length || !R.wapNet.length) return { trades:[], reason:"no-columns" };
+  const sides = [{ side:"Buy", qty:R.qty[0], wap:R.wapNet[0], gross:R.wapGross[0] }];
+  if (R.qty.length>1 && R.wapNet.length>1)
+    sides.push({ side:"Sell", qty:R.qty[1], wap:R.wapNet[1], gross:R.wapGross[1] });
+
+  const out = []; let last = null;
+  for (let i=head.end+1;i<lines.length;i++){
+    const line = lines[i];
+    if (!line.text) continue;
+    const cs = rowCells(line, cols);
+    const isinM = line.text.match(ISIN_RE);
+    const nameTxt = R.name>=0 ? (cs[R.name]||"").trim() : "";
+    if (!isinM){
+      const hasNums = cs.some(c => c && !isNaN(num(c)));
+      if (!hasNums && nameTxt && last)
+        last.forEach(t => { t.scrip = (t.scrip+" "+nameTxt).replace(/\s+/g," ").trim(); });
+      continue;
+    }
+    const made = [];
+    for (const s of sides){
+      const q = num(cs[s.qty]), w = num(cs[s.wap]);
+      if (isNaN(q) || q===0 || isNaN(w) || w===0) continue;
+      made.push({ scrip: stripISIN(nameTxt, isinM[1])||isinM[1], isin: isinM[1], side: s.side,
+        qty: Math.abs(q), wap: Math.abs(w),
+        gross: s.gross!=null ? Math.abs(num(cs[s.gross])) : NaN,
+        basis: "WAP after brokerage", fills: 1 });
+    }
+    if (made.length){ out.push(...made); last = made; }
+  }
+  return { trades: out, reason: out.length ? "ok" : "no-rows" };
+}
+
+/* ICICI per-scrip "Summary including statutory levies" block reader.
+   Layout per scrip:
+     Summary including statutory levies -
+     <header line 1 (wrapped)>
+     ISIN: INExxxxxxxxx <header line 2 (wrapped)>
+     <header line 3 (wrapped)>
+     <SECURITY NAME>
+     Buy  <qty> <WAP> <brokerage/sh> <WAP after brk> <total value> <levies...>
+     Sell <qty> ...
+     Total Payable / Receivable ...
+   The name sits on the line directly above the Buy row; header continuation
+   lines (many charge/levy keywords) are skipped. The per-order detail table that
+   follows is ignored — only the per-ISIN summary is returned. */
+function extractIciciSummary(lines){
+  const out = [];
+  const ISIN_LBL = /\bISIN\s*[:\-]\s*(IN[EFDN][0-9A-Z]{9})\b/i;
+  const HDR_WORD = /\b(weighted|average|brokerage|charges|turnover|transaction|payable|receivable|quantity|value|stamp|duty|price|wap|statutory|levies|goods|net)\b/gi;
+  const nameAbove = (k) => {
+    for (let j=k-1;j>=Math.max(0,k-5);j--){
+      const t = lines[j].text.trim();
+      if (!t) continue;
+      if (/^(buy|sell|total)\b/i.test(t)) continue;
+      if (ISIN_LBL.test(t)) return "";
+      if ((t.match(HDR_WORD)||[]).length >= 2) continue;   // header continuation
+      if (/^[\d.,()`*\s\/-]+$/.test(t)) continue;          // pure numbers/symbols
+      return t;
+    }
+    return "";
+  };
+  for (let i=0;i<lines.length;i++){
+    const m = lines[i].text.match(ISIN_LBL);
+    if (!m) continue;
+    const isin = m[1].toUpperCase();
+    for (let j=i+1;j<Math.min(i+9,lines.length);j++){
+      const t = lines[j].text.trim();
+      if (ISIN_LBL.test(t)) break;                 // next block started
+      if (/^total\b/i.test(t)) break;              // end of this block's Buy/Sell
+      const bm = t.match(/^(buy|sell)\b/i);
+      if (!bm) continue;
+      const nums = numericTokens(lines[j].parts).map(o => o.v);
+      if (nums.length < 5) continue;
+      const qty = nums[0], wap = nums[1], brok = nums[2], wapAfter = nums[3], totalVal = nums[4];
+      if (!Number.isInteger(qty) || qty <= 0) continue;   // Sell 0 rows skipped
+      const tol = Math.max(0.02, Math.abs(wap)*3e-5);
+      if (Math.abs((wap+brok)-wapAfter) > tol && Math.abs((wap-brok)-wapAfter) > tol) continue;
+      const net = wapAfter;
+      const valOK = totalVal ? Math.abs(Math.abs(totalVal) - qty*net) <= Math.max(0.75, qty*net*2e-4) : null;
+      out.push({ scrip: cleanScrip(nameAbove(j)), isin, side: /^buy/i.test(bm[1]) ? "Buy" : "Sell",
+                 qty, wap: net, gross: wap, fills: 1, verified: valOK === true,
+                 basis: "After brokerage" + (valOK === true ? " ✓ verified" : "") });
+    }
+  }
+  return out;
+}
+
+function extractTradesInner(lines){
+  const fullText = lines.map(l => l.text).join("\n");
+  const wantsNet = /after\s*brokerage/i.test(fullText);
+
+  // Equity summary only. A real equity contract note always contains at least one
+  // ISIN. Documents with none — DP Charges Statements, ledgers, fee/GST summaries,
+  // holding statements — are not contract notes and must yield no "trades".
+  if (!ISIN_RE.test(fullText))
+    return { trades: [], reason: "no-isin (not an equity contract note)", diag: null };
+
+  // ICICI Direct / ICICI Securities: each scrip is its own "Summary including
+  // statutory levies" block with the ISIN, the security name and the Buy/Sell
+  // numbers on SEPARATE lines, followed by a per-order detail table. The generic
+  // parsers can't associate the split fields and fall into the detail (nameless
+  // rows, fills). Use the dedicated block reader and skip the detail entirely.
+  if (/summary\s*including\s*statutory\s*levies/i.test(fullText) && /\bISIN\s*[:\-]\s*IN[EFDN]/i.test(fullText)){
+    const ic = extractIciciSummary(lines);
+    if (ic.length) return { trades: ic, reason: "ok",
+      diag: { header: "ICICI per-ISIN summary", roles: ["ICICI 'Summary including statutory levies' blocks",
+        "ISIN / name / Buy row read across separate lines; per-order detail ignored"] } };
+  }
+
+  const mathRows = extractByArithmetic(lines);
+  if (mathRows && mathRows.length) return { trades: mathRows, reason: "ok",
+    diag: { header: "identified arithmetically", roles: ["Arithmetic identification",
+      "net = gross ± brokerage/share, cross-checked against qty × net = total value"] } };
+
+  const sHead = findSummaryHeader(lines);
+  if (sHead){
+    const r = extractSummary(lines, sHead);
+    if (r.trades.length){
+      const R = summaryRoles(sHead.cols);
+      return { trades: r.trades, reason: "ok", diag: { header: sHead.joined,
+        roles: ["ISIN-summary layout",
+                `buy WAP="${(sHead.cols[R.wapNet[0]]||{}).text||""}"`,
+                R.wapNet[1]!=null ? `sell WAP="${sHead.cols[R.wapNet[1]].text}"` : "no sell block"] } };
+    }
+  }
+  const head = findHeader(lines);
+  if (!head) return { trades: [], reason: "no-table", diag: null };
+  let cols = head.cols, roles = roleColumns(cols);
+  const diag = { header: head.joined, roles: Object.keys(roles).map(k => `${k}="${cols[roles[k]].text}"`) };
+  if (roles.qty == null) return { trades: [], reason: "no-columns", diag };
+
+  const raw = [];
+  let pendingName = "", pendingRaw = "", lastName = "", lastIsin = "";
+
+  for (let i = head.end + 1; i < lines.length; i++){
+    const line = lines[i];
+    if (!line.text) continue;
+    if (STRONG_STOP.test(line.text)) break;
+
+    const isinM = line.text.match(ISIN_RE);
+    if (!isinM && WEAK_SKIP.test(line.text)){ pendingName = ""; pendingRaw = ""; continue; }
+
+    const re = findHeader(lines, i);
+    if (re && re.start === i){ cols = re.cols; roles = roleColumns(cols); i = re.end; pendingName = ""; pendingRaw = ""; continue; }
+
+    const cs = rowCells(line, cols);
+    const g = k => (roles[k] != null ? cs[roles[k]] : "");
+    const qty = num(g("qty"));
+    let nameTxt = g("name").replace(ISIN_RE,"").replace(/\s+/g," ").trim();
+
+    if (isNaN(qty)){
+      if (nameTxt && /[A-Za-z]{2,}/.test(nameTxt) && nameTxt.length <= 40 && !NAME_JUNK.test(" " + nameTxt)){
+        pendingName = ((pendingName ? pendingName+" " : "") + nameTxt).slice(0,60);
+        pendingRaw = (pendingRaw + " " + line.text).slice(-120);
+      } else { pendingName = ""; pendingRaw = ""; }
+      continue;
+    }
+
+    let name = [pendingName, nameTxt].filter(Boolean).join(" ").replace(/\s+/g," ").trim();
+    const pendingRawSnapshot = pendingRaw; pendingName = ""; pendingRaw = "";
+    // recover an ISIN that wraps across lines from the combined row+name text
+    const isin = isinM ? isinM[1] : recoverISIN(pendingRawSnapshot + " " + line.text);
+    if (isin) name = stripISIN(name, isin);
+    if (!name || !/[A-Za-z]{2,}/.test(name)) name = lastName;
+    if (!name) continue;
+    lastName = name; if (isin) lastIsin = isin;
+
+    const sideTxt = (g("side")||"").toUpperCase();
+    let side;
+    if (/\bB\b|BUY|PURCH/.test(sideTxt)) side = "Buy";
+    else if (/\bS\b|SELL|SALE/.test(sideTxt)) side = "Sell";
+    else side = qty < 0 ? "Sell" : "Buy";
+
+    const netRate = num(g("netRate")), gross = num(g("rate")),
+          brok = num(g("brok")), netTot = num(g("netTotal"));
+    let rate = NaN, basis = "";
+    let conf = "gross";
+    if (!isNaN(netRate) && netRate !== 0){ rate = netRate; basis = "Net rate column"; conf = "stated"; }
+    else if (!isNaN(gross) && !isNaN(brok)){
+      rate = side === "Buy" ? gross + Math.abs(brok) : gross - Math.abs(brok);
+      basis = "Rate ± brokerage/unit"; conf = "computed";
+    } else if (!isNaN(netTot) && qty){ rate = Math.abs(netTot/qty); basis = "Net total ÷ qty"; conf = "computed"; }
+    else if (!isNaN(gross)){ rate = gross; basis = "Gross rate only"; conf = "gross"; }
+    if (isNaN(rate) || rate === 0) continue;
+
+    raw.push({ name, isin: isin || lastIsin, side, qty: Math.abs(qty), rate: Math.abs(rate),
+               gross: !isNaN(gross) ? Math.abs(gross) : NaN, basis, conf });
+  }
+
+  const agg = new Map();
+  raw.forEach(r => {
+    const k = r.name + "||" + r.side;
+    if (!agg.has(k)) agg.set(k, { name:r.name, isin:r.isin, side:r.side, qty:0, notional:0, grossNotional:0, grossQty:0, basis:r.basis, conf:r.conf, fills:0 });
+    const a = agg.get(k);
+    a.qty += r.qty; a.notional += r.qty * r.rate; a.fills++;
+    if (!isNaN(r.gross)){ a.grossNotional += r.qty * r.gross; a.grossQty += r.qty; }
+    if (!a.isin && r.isin) a.isin = r.isin;
+  });
+  const trades = [...agg.values()].map(a => ({
+    scrip:cleanScrip(a.name), isin:a.isin, side:a.side, qty:a.qty,
+    wap: a.qty ? Math.round((a.notional/a.qty)*1e4)/1e4 : NaN,
+    gross: a.grossQty ? Math.round((a.grossNotional/a.grossQty)*1e4)/1e4 : NaN, basis:a.basis, conf:a.conf, fills:a.fills,
+  }));
+  trades.forEach(t => {
+    if (t.conf === "gross") t.basis = "⚠ GROSS — no brokerage found";
+  });
+  return { trades, reason: trades.length ? "ok" : "no-rows", diag };
+}
+
+/* Charge-line guard: a stock trade is never a depository / DP / fee line. This
+   phrase list matches the CHARGE DESCRIPTION, not a ticker, so listed depositories
+   (CDSL, NSDL-adjacent names) are unaffected — only "... DP Charges", "Depository
+   Charges", "Demat Charges", AMC/custody/pledge/transaction charges are dropped. */
+const CHARGE_ROW = /\b(dp\s*charges?|depositor(?:y|ies)\s*charges?|demat\s*charges?|remat\s*charges?|pledge\s*charges?|unpledge\s*charges?|account\s*maintenance|annual\s*maintenance|amc\s*charges?|custody\s*charges?|custodian\s*charges?|transaction\s*charges?|late\s*fee|penalt(?:y|ies)|folio\s*charges?)\b/i;
+
+/* Public entry point. Wraps the parser so that, for EVERY broker and EVERY
+   layout, DP / depository / fee statements never yield stock trades. */
+function extractTrades(lines){
+  const fullText = lines.map(l => l.text).join("\n");
+  // Whole-document skip: a DP Charges / depository / fee statement is not a
+  // contract note, so it yields nothing — even in the rare case it carries ISINs.
+  const isChargesDoc = /\b(dp\s*charges?\s*statement|statement\s*of\s*charges|depositor(?:y|ies)\s*charges?\s*statement|charges?\s*statement)\b/i.test(fullText);
+  if (isChargesDoc && !/\bcontract\s*note\b/i.test(fullText))
+    return { trades: [], reason: "dp-charges statement (not a contract note)", diag: null };
+
+  const res = extractTradesInner(lines);
+  // Final net: drop any row whose scrip is a charge/fee description (covers a DP
+  // charges block bundled into a contract-note PDF, on any broker).
+  const kept = (res.trades || []).filter(t => !CHARGE_ROW.test(t.scrip || ""));
+  const reason = kept.length ? res.reason
+               : ((res.trades || []).length ? "only charge rows — no trades" : res.reason);
+  return { ...res, trades: kept, reason };
+}
+
+/* ---- Broker format memory --------------------------------------------------
+   ANGEL ONE (Angel One Limited)  — detected via /angel\s*(one|broking)/.
+   Section header: "Equity Segment - Trade Summary". One row per ISIN, BUY block +
+   SELL block + Net Obligation (same shape as Anand Rathi/IIFL). Brokerage is
+   0.0000 (WAP == WAP after brokerage). Security name wraps ("NAZARA
+   TECHNOLOGIES" + "LTD" on the next line) — rejoined by line grouping.
+   Client name: explicit "Client Name : SUMIT RAMESH CHUTTAR" label, merged on a
+   row with "Trading Back office code" and the exchange table — findClientName
+   step 1 takes the value after the label.
+   Trade date: "Trade Date : 19/08/2026" (inside the address block, distinct from
+   the settlement "DATE 20/08/2026" — the labelled "trade date" wins).
+   SELL side: sell Quantity is POSITIVE (e.g. NAZARA 960) with a zero BUY block;
+   side resolved from the BUY/SELL column position, not the qty sign.
+   A per-order annexure + "Order Wise Brokerage Details" follow the summary and
+   are excluded ("... separate annexure").
+
+   IIFL CAPITAL (IIFL Capital Services / IIFL Securities)
+   Section header: "Equity Segment". One row per ISIN, same BUY/SELL layout as
+   Anand Rathi. Brokerage is often 0.0000 (WAP == WAP after brokerage); values use
+   Indian grouping (1,89,750.00). Handled by the arithmetic identifier.
+   Client name: printed at the TOP of the address block with no label (e.g.
+   "NARENDRA PRAKASH DHOKA" above "S.NO.81/..."), UCC/PAN labels below — resolved
+   by findClientName step 5 (nameish line followed by an address line, PAN/UCC
+   below). Trade date: "TRADE DATE  Mon DD YYYY" (month-first, e.g. Aug 20 2026).
+
+   BAJAJ (Bajaj Financial Securities / Bajaj Broking)
+   Section header: "Equity Segment", one row per ISIN, BUY/SELL after-brokerage
+   columns (same shape as IIFL/Anand Rathi). Net Obligation uses a Unicode minus
+   (normalised in pageLines). Client name: "To," addressee block (step 3). Trade
+   date: "Trade Date  DD-Mon-YYYY" (e.g. 20-Aug-2026), inside a "Contract Details"
+   box; UCC as "UCC/Backoffice Code  PUN1037".
+
+   ZERODHA (Zerodha Broking Ltd)
+   Section header: "Equity". One row per ISIN, BUY/SELL after-brokerage columns
+   (brokerage 0.0000). Total Buy Value is POSITIVE, Net Obligation NEGATIVE — the
+   value cross-check compares on magnitude. A per-order breakdown is in a separate
+   annexure ("* Exchange-wise details ... separate annexure"), which ANNEXURE_START
+   catches so only the summary is read.
+   Client name: the UCC/client code prints on its own line at the top of the
+   address block with the name on the next line ("BGK607" / "SHRADDHA VIKAS
+   MANDLECHA"), no label — resolved by findClientName step 1e.
+   Trade date: "Trade Date: dd/mm/yyyy".
+
+   GROWW INVEST TECH PRIVATE LIMITED  (formerly Nextbillion Technology Pvt Ltd)
+   Detected via /groww|nextbillion/. Section header: "EQUITY".
+   Client name: printed under a bare "Name" label in a key/value block
+     ("Name | Udayraj Singh Broca") and repeated in the "Dear <name>,"
+     salutation — there is NO "Client Name" label. (steps 1c / 1d.)
+   Trade date: "Trade Date" cell, format dd-mm-yyyy (e.g. 07-07-2026).
+   Table: ISIN | Security Name/Symbol | BUY(Quantity, WAP per Share, Brokerage
+     per Share, WAP per Share after brokerage, Total Value after brokerage) |
+     SELL(same five) | Net Quantity | Net Amount (Rs).
+   Notes that matter for parsing:
+     - The after-brokerage WAP is the wanted rate: BUY net = WAP + brokerage,
+       SELL net = WAP - brokerage (arithmetic identifier).
+     - SELL Quantity is SIGNED NEGATIVE (e.g. -500); qty is taken on magnitude
+       and a negative sign is treated as a Sell (see extractArithmeticFrom).
+     - "Total Value after brokerage" is positive for a SELL, negative for a BUY;
+       the value cross-check compares on magnitude.
+     - A per-order "Annexure A" (EQUITY: Order/Trade no+time, Gross Rate, Net
+       Rate, Net Total) follows the summary, obligation block and DP charges.
+       Its "Gross Rate == Net Rate" fills would mis-parse (rate+rate = total), so
+       extraction is scoped to the summary and STOPS at "Annexure A"
+       (ANNEXURE_START). Only the one-row-per-ISIN summary is returned.
+
+   ANAND RATHI SHARE AND STOCK BROKERS LIMITED  (segment: NCL Capital)
+   Layout: ISIN-summary / "Equity Segment" table, one row per ISIN.
+   Columns per row:
+     ISIN | Security Name/Symbol
+     BUY  -> Quantity | WAP (across exchanges) | Brokerage per Share (Rs)
+             | WAP (across exchanges) after brokerage (Rs) | Total BUY Value after brokerage
+     SELL -> Quantity | WAP | Brokerage per Share | WAP after brokerage | Total SELL Value
+     Net Quantity | Net Obligation for ISIN (Before Levies)
+   Notes that matter for parsing:
+     - The after-brokerage WAP is the rate we want: BUY net = WAP + brokerage/share,
+       SELL net = WAP - brokerage/share (handled by the arithmetic identifier).
+     - "Total BUY/SELL Value after brokerage" is SIGNED as an obligation: a BUY is
+       NEGATIVE (cash out), a SELL is POSITIVE. The value cross-check therefore
+       compares on magnitude (see extractArithmeticFrom).
+     - Unused side prints all zeros, which the qty>0 / net>0 guards skip.
+   -------------------------------------------------------------------------- */
+/* ---- header fields ---- */
+function detectBroker(text){
+  const t = text.toLowerCase();
+  const map = [["Zerodha",/zerodha/],["Groww",/groww|nextbillion/],["Upstox",/upstox|rksv/],
+    ["ICICI Direct",/icici\s*direct|icici securities/],["HDFC Securities",/hdfc secur/],
+    ["Axis Securities",/axis secur|axis direct/],["Kotak Securities",/kotak secur/],
+    ["Angel One",/angel\s*(one|broking)/],["5paisa",/5paisa|five ?paisa/],["Motilal Oswal",/motilal/],
+    ["Sharekhan",/sharekhan/],["Dhan",/dhan\b/],["Fyers",/fyers/],["IIFL Capital",/iifl/],["SBI Securities",/sbi\s*secur/],
+    ["Bajaj",/bajaj/],
+    ["Anand Rathi",/anand\s*rathi/]];
+  for (const [n,re] of map) if (re.test(t)) return n;
+  return "";
+}
+
+const NAME_LBL = /(client\s*name|name\s*of\s*(the\s*)?(client|constituent|investor)|investor\s*name|constituent\s*name)/i;
+const ADDRISH = /^(state|pan\b|pan\s*no|gstin|gst\b|email|e-?mail|phone|mobile|tel|fax|address|dear|sir|madam|dp\s*id|client\s*code|ucc\b|demat)/i;
+// Words that never appear in a client name but do appear in table headers,
+// footers and boilerplate. If a candidate contains any of these it is not a name.
+const NOT_NAME = /\b(qty|quantity|total|buy|sell|brokerage|rate|exchange|exchanges|isin|security|scrip|symbol|contract|note|trade|order|net|gross|value|amount|obligation|settlement|charges|levies|summary|statutory|gst|stt|sebi|stamp|segment|clearing|trading\s*no|per\s*unit|per\s*share|closing|derivatives|remarks|invoice|authorized|authorised|signatory|proprietor|partner|compliance|registered|office|website|corporate|grievance)\b/i;
+
+function nearestCell(line, x){
+  let best=null, bd=1e9;
+  for (const c of line.cells){ const d = Math.abs(c.x0 - x); if (d < bd && d < 70){ bd = d; best = c; } }
+  return best ? best.text : null;
+}
+function isNameish(s){
+  if (!s) return false;
+  let t = String(s).trim();
+  if (t.length < 4 || t.length > 80) return false;
+  if (/\d/.test(t)) return false;            // address lines carry numbers
+  if (ADDRISH.test(t)) return false;
+  if (NOT_NAME.test(t)) return false;        // table-header / boilerplate text
+  // reject lone connector / filler words that leak from wrapped table headers
+  if (/^(across|before|after|only|for|the|and|of|per|unit|share|from|with|into|value|wise|details|page|no|nse|bse|mcx|cds|fo|cm|ncl)$/i.test(t)) return false;
+  const words = t.split(/\s+/).filter(w => /[A-Za-z]{2,}/.test(w));
+  // a real name has 2+ words, OR one long word that is itself a company/HUF marker
+  if (words.length < 2){
+    if (!/(ltd|limited|huf|llp|trust|enterprises?|traders?|industries)/i.test(t)) return false;
+  }
+  // every word must be name-like (letters, maybe a dot/&); reject if any word is a
+  // lowercase fragment shorter than 3 letters (headers wrap into "across", "for", etc.)
+  const allNameWords = words.every(w => {
+    const bare = w.replace(/[^A-Za-z]/g,"");
+    return bare.length >= 2 && !/^(across|for|the|and|of|per|net|buy|qty)$/i.test(bare);
+  });
+  if (!allNameWords) return false;
+  return /[A-Za-z]{3,}/.test(t);
+}
+// strip leading honorifics and entity prefixes from the client name so the
+// customer field shows just the name (e.g. "MR WINGS UNLIMITED" -> "WINGS
+// UNLIMITED", "M/s KAVITA ..." -> "KAVITA ...").
+const cleanName = s => String(s).replace(/\s+/g," ")
+  .replace(/^\s*(m\/s\.?|messrs\.?|mr\.?|mrs\.?|ms\.?|miss|master|shri|shree|sri|smt\.?|kum\.?|dr\.?|prof\.?)\s+/i,"")
+  .replace(/[,:;.\s]+$/,"").trim().slice(0,80);
+
+function findClientName(lines){
+  // A candidate is only accepted if the WHOLE line is a name — this stops stray
+  // table cells (e.g. a lone "across" or "tal Buy Qty") that happen to align
+  // under an anchor from being mistaken for the client.
+  const wholeLineName = t => { t = String(t||"").trim(); return isNameish(t) && !ADDRISH.test(t); };
+
+  const CODE_LBL = /(trading\s*\/?\s*back\s*office\s*code|backoffice\s*code|\bucc\s*code|client\s*code|dp\s*code|gst\s*invoice\s*no|invoice\s*no|branch\s*code)/i;
+
+  // Take the leading run of name words from a line that continues into table
+  // header text, e.g. "MR WINGS UNLIMITED Exchange Segment Clearing No" -> the
+  // client name is the part before the first header/boilerplate word.
+  const leadingName = full => {
+    const s = String(full||"").trim();
+    if (CODE_LBL.test(s) || NAME_LBL.test(s)) return "";   // it's a label line, not a name
+    const words = s.split(/\s+/);
+    const out = [];
+    for (const w of words){
+      if (NOT_NAME.test(w) || /^(exchange|segment|clearing|trading|number|cmbp|sebi|registration|no\.?|code|ucc|branch|invoice|gst)$/i.test(w)) break;
+      if (/\d/.test(w)) break;                 // a digit ends the name (address/code)
+      if (/[:\/]/.test(w)) break;              // a colon or slash marks a label
+      out.push(w);
+    }
+    const cand = out.join(" ").trim();
+    return (cand.length >= 4 && isNameish(cand)) ? cand : "";
+  };
+
+  // 1) an explicit "Client Name" label — value on the same line or just below
+  for (let i=0;i<lines.length;i++){
+    for (const c of lines[i].cells){
+      if (!NAME_LBL.test(c.text)) continue;
+      const after = c.text.replace(new RegExp(".*?"+NAME_LBL.source+"\\s*[:\\-]?\\s*","i"),"").trim();
+      if (isNameish(after)) return cleanName(after);
+      // value in a cell to the right: take the first nameish one, skipping a lone
+      // ":" separator; stop at the first non-name cell so an adjacent column
+      // ("Trading Back office code ...") is never pulled in.
+      for (const k of lines[i].cells){
+        if (k.x0 <= c.x1-2) continue;
+        const v = k.text.replace(/^[:\-\s]+/,"").trim();
+        if (isNameish(v)) return cleanName(v);
+        if (v) break;
+      }
+      for (let j=i+1;j<Math.min(i+3,lines.length);j++)
+        if (wholeLineName(lines[j].text)) return cleanName(lines[j].text);
+    }
+  }
+
+  // 1b) "NAME(CLIENTCODE)" address-block layout (e.g. Anand Rathi): the client
+  //     name is the first line of the address block with the UCC / client code
+  //     glued on in parentheses — "MANISHA SUNIL SHAH(GPU2M100)". No "Client
+  //     Name" label, no "To,". This shape is definitive, so it runs BEFORE the
+  //     fuzzy code-label / addressee heuristics below (which otherwise latch onto
+  //     the footer's "Client Code: ..." and drag in a following footnote line).
+  //     The code must carry a digit so "(Rs)", "(IRN)", "(T + 1)" can't match,
+  //     and the row often merges with a right-hand cell (e.g. "...(GPU2M100)
+  //     SETTLEMENT DATE."), so only the name+code prefix is required.
+  const NAMECODE = /^([A-Za-z][A-Za-z .&'\-]{3,60}?)\s*\(\s*([A-Za-z]*\d[A-Za-z0-9]{2,})\s*\)(?:\s|$)/;
+  for (let i=0;i<Math.min(lines.length,60);i++){
+    const m = lines[i].text.trim().match(NAMECODE);
+    if (m && isNameish(m[1]) && !ADDRISH.test(m[1])) return cleanName(m[1]);
+  }
+
+  // 1c) Groww-style key/value block: a cell that is exactly "Name" (not "Security
+  //     Name/Symbol", which is why the match is anchored) with the client's name
+  //     in the cell(s) immediately to its right — "Name | Udayraj Singh Broca".
+  for (const line of lines){
+    const cs = line.cells;
+    for (let k=0;k<cs.length;k++){
+      if (!/^name$/i.test(cs[k].text.trim())) continue;
+      let best = "";
+      for (let take=1; take<=4 && k+take < cs.length; take++){
+        const val = cs.slice(k+1, k+1+take).map(c=>c.text).join(" ").trim();
+        if (isNameish(val)) best = val;   // keep extending to capture the full name
+      }
+      if (best) return cleanName(best);
+    }
+  }
+
+  // 1d) "Dear <name>," salutation (Groww: "Dear Udayraj Singh Broca,"). isNameish
+  //     rejects "Dear Sir/Madam," etc., so only a real addressee name is taken.
+  for (let i=0;i<Math.min(lines.length,150);i++){
+    const m = lines[i].text.match(/^dear\s+(.+?)\s*[,:]?\s*$/i);
+    if (m && isNameish(m[1])) return cleanName(m[1]);
+  }
+
+  // 1e) Zerodha-style: the client (UCC) code sits on its own line at the top of
+  //     the address block with the client name on the very next line —
+  //     "BGK607" / "SHRADDHA VIKAS MANDLECHA". No "Client Name" label, no "To,".
+  //     Anchor on the UCC / client-code value (read from its labelled line), find
+  //     the standalone line equal to that code, and take the next name line.
+  {
+    const full = lines.map(l => l.text).join("\n");
+    const cm = full.match(/\bucc\b\s*(?:code)?\s*[:\-]\s*([A-Z]{2,}[A-Z0-9]{2,10})\b/i);
+    if (cm){
+      const code = cm[1].toUpperCase();
+      for (let i=0;i<lines.length-1;i++){
+        if (lines[i].text.trim().toUpperCase() !== code) continue;
+        for (let j=i+1;j<Math.min(i+3,lines.length);j++){
+          const t = lines[j].text.trim();
+          if (!t) continue;
+          if (isNameish(t)) return cleanName(t);
+          break;
+        }
+      }
+    }
+  }
+
+  // 2) Kotak / Religare / most SEBI notes: the client name is on or just after a
+  //    code label (Trading/Backoffice Code, UCC Code, GST Invoice No, Client
+  //    Code). In some layouts (Kotak) the name shares its visual row with the
+  //    exchange-registration table header, so the merged line reads
+  //    "MR WINGS UNLIMITED  Exchange  Segment ...". We therefore take only the
+  //    LEFT-BLOCK cells — those left of the first table column — and validate that.
+  const leftBlockName = line => {
+    if (!line.cells.length) return "";
+    // find the largest x-gap between adjacent cells; the address/name block is
+    // everything left of that gap (the table starts on the right).
+    let cut = Infinity, maxGap = 0;
+    for (let k=0;k<line.cells.length-1;k++){
+      const gap = line.cells[k+1].x0 - line.cells[k].x1;
+      if (gap > maxGap && gap > 40){ maxGap = gap; cut = line.cells[k+1].x0; }
+    }
+    // Rebuild the left text from the ORIGINAL parts (which preserve inter-word
+    // spacing) rather than the merged cell text, whose spaces may be collapsed.
+    const leftParts = line.parts.filter(p => (p.x + p.w/2) < cut).map(p => p.str);
+    const left = leftParts.join(" ").replace(/\s+/g," ").trim();
+    return left;
+  };
+  for (let i=0;i<Math.min(lines.length,140);i++){
+    if (!CODE_LBL.test(lines[i].text)) continue;
+    // A page footer ("Page : 3  Client Code : DHOKANP2") repeats the client code
+    // far from the header; the line after it (e.g. "QR Code") is not the name.
+    if (/\bpage\b\s*[:\-]?\s*\d/i.test(lines[i].text)) continue;
+    for (let j=i+1;j<Math.min(i+4,lines.length);j++){
+      const line = lines[j];
+      const full = line.text.trim();
+      if (!full) continue;
+      if (wholeLineName(full)) return cleanName(full);
+      // name may share the row with the table header → try the left block only
+      const left = leftBlockName(line);
+      if (left && left !== full && isNameish(left) && !ADDRISH.test(left)) return cleanName(left);
+      // also try progressively fewer leading words (drop trailing header words)
+      const lead = leadingName(full);
+      if (lead) return cleanName(lead);
+      if (/\d/.test(full) && j > i+1) break;
+    }
+  }
+
+  // 3) the "To," / "Sir/Madam" addressee block — whole following line only
+  for (let i=0;i<Math.min(lines.length,150);i++){
+    const line = lines[i];
+    const m = line.text.match(/^to\s*[,:]?\s*(.*)$/i);
+    if (m){
+      if (isNameish(m[1])) return cleanName(m[1]);
+      for (let j=i+1;j<Math.min(i+4,lines.length);j++){
+        const t = lines[j].text.trim();
+        if (!t) continue;
+        if (wholeLineName(t)) return cleanName(t);
+        if (/\d/.test(t)) break;
+      }
+    }
+  }
+
+  // 5) Name at the top of the address block with NO label (IIFL Capital, etc.):
+  //    the client name is a nameish line immediately followed by an address line
+  //    (S.NO / PLOT / FLAT / ROAD / NAGAR ... or a pincode), sitting above the
+  //    PAN/UCC labels. Runs last so it only fires when the labelled/addressee
+  //    strategies above found nothing.
+  const ADDR_LINE = /(\bs\.?\s*no\b|\bplot\b|\bflat\b|\bh\.?\s*no\b|\bhouse\b|\broad\b|\bnagar\b|\bsector\b|\bstreet\b|\bcolony\b|\bmarg\b|\bwing\b|\bfloor\b|\bblock\b|\d{3})/i;
+  for (let i=0;i<Math.min(lines.length,45);i++){
+    // Read the LEFT cell only: on some notes (IIFL) the name shares its row with
+    // the settlement column ("NARENDRA PRAKASH DHOKA  Settlement Date 21/08/2026").
+    const first = (lines[i].cells && lines[i].cells[0] ? lines[i].cells[0].text : lines[i].text).trim();
+    if (!wholeLineName(first)) continue;
+    let nextAddr = false;
+    for (let j=i+1;j<Math.min(i+3,lines.length);j++){
+      const u = (lines[j].cells && lines[j].cells[0] ? lines[j].cells[0].text : lines[j].text).trim();
+      if (!u) continue;
+      nextAddr = ADDR_LINE.test(u); break;
+    }
+    if (!nextAddr) continue;
+    // confirm this is the client block: a PAN / UCC label appears just below
+    let hasId = false;
+    for (let j=i+1;j<Math.min(i+14,lines.length);j++){
+      if (/\bpan\b|\bucc\b|place\s*of\s*supply/i.test(lines[j].text)){ hasId = true; break; }
+    }
+    if (hasId) return cleanName(first);
+  }
+
+  // 4) "NAME(CLIENTCODE)" is handled early (see step 1b above).
+  return "";
+}
+
+function findTradeDate(lines){
+  const full = lines.map(l=>l.text).join("\n");
+  // day-first with -/. separators (27/07/2026, 11-FEB-26, 20-Aug-2026) OR
+  // month-first with spaces (Aug 20 2026, August 20, 2026). Spaces are NOT allowed
+  // as day-first separators, so table digits like "...01020 CENTUM 15" can't match.
+  const DNUM = "\\d{1,2}[\\-\\/\\.](?:\\d{1,2}|[A-Za-z]{3,9})[\\-\\/\\.]\\d{2,4}";
+  const DMON = "[A-Za-z]{3,9}\\.?\\s+\\d{1,2},?\\s+\\d{2,4}";
+  const D = "("+DNUM+"|"+DMON+")";
+  const labels = [
+    new RegExp("trade\\s*date\\s*[:\\-]?\\s*"+D,"i"),
+    new RegExp("dt\\.?\\s*of\\s*trade\\s*[:\\-]?\\s*"+D,"i"),
+    new RegExp("date\\s*&?\\s*time\\s*of\\s*(?:trade|contract)\\s*[:\\-]?\\s*"+D,"i"),
+    new RegExp("(?:trading|trade)\\s*day\\s*[:\\-]?\\s*"+D,"i"),
+    new RegExp("(?:dated|date)\\s*[:\\-]?\\s*"+D,"i"),
+  ];
+  for (const re of labels){ const m = full.match(re); if (m) return m[1].trim(); }
+  const m2 = full.match(new RegExp("("+DNUM+")"));   // strict fallback (no space-separated)
+  return m2 ? m2[1].trim() : "";
+}
+
+/* ================= Run ================= */
+const runBtn = $("#runBtn");
+runBtn.onclick = runExtraction;
+
+async function runExtraction(){
+  if (!state.pdfs.length){ toast("Add at least one PDF first."); return; }
+  runBtn.disabled = true;
+  const pw = $("#progressWrap"); pw.classList.add("on");
+  const total = state.pdfs.length;
+  state.results = [];
+  for (let i=0;i<total;i++){
+    updateProgress(i, total, state.pdfs[i].name);
+    state.results.push(await processOne(state.pdfs[i]));
+    renderResults();
+  }
+  updateProgress(total, total, "Done");
+  setTimeout(()=>pw.classList.remove("on"), 900);
+  runBtn.disabled = false;
+  recomputeAccounts();
+  const failed = state.results.filter(r => r.status === "lock");
+  if (failed.length) openFailModal(failed);
+  else if (unverifiedRows().length) openPriceModal();
+  else if (unresolvedClients().length) openAcctModal();
+  toast(`Finished ${total} file${total>1?"s":""}.`);
+}
+
+function updateProgress(done, total, label){
+  $("#progFrac").textContent = `${done} / ${total}`;
+  $("#progLabel").textContent = done < total ? `Processing ${done+1} of ${total} — ${label}` : "Completed";
+  $("#progBar").style.width = (total ? (done/total*100) : 0) + "%";
+}
+
+async function readAllLines(doc){
+  const out = [];
+  for (let p=1; p<=doc.numPages; p++){
+    const page = await doc.getPage(p);
+    out.push(...pageLines(await page.getTextContent()));
+  }
+  return out;
+}
+
+async function processOne(p){
+  const base = { id:p.id, file:p.name, password:"", broker:"", client:"", tradeDate:"", trades:[], status:"lock", lines:[], diag:null };
+  let opened;
+  // Client master: passwords for the client name at the end of this file's name are
+  // tried first (all of them), then any passwords entered manually this session.
+  const tryList = [...passwordsForFile(p.name), ...state.passwords];
+  try { opened = await openPdf(p.bytes, tryList); }
+  catch(e){ return { ...base, status:"warn", note:"Could not read PDF" }; }
+  if (!opened) return { ...base, status:"lock" };
+  return await extractFrom(p, opened);
+}
+
+async function extractFrom(p, opened){
+  const base = { id:p.id, file:p.name, password:opened.password, broker:"", client:"", tradeDate:"", trades:[], status:"lock", lines:[], diag:null };
+  try{
+    const lines = await readAllLines(opened.doc);
+    const fullText = lines.map(l=>l.text).join("\n");
+    const { trades, reason, diag } = extractTrades(lines);
+    const note = trades.length ? "" :
+      reason === "no-table" ? (lines.length ? "No trade table found" : "No text layer (scanned image?)")
+      : reason === "no-columns" ? "Table found, columns unclear"
+      : "Table found, no rows matched";
+    return { ...base,
+      broker: detectBroker(fullText), client: findClientName(lines), tradeDate: findTradeDate(lines),
+      trades, diag, note, status: trades.length ? "ok" : "warn",
+      lines: lines.slice(0, 500).map(l => l.text),
+    };
+  } catch(e){ return { ...base, status:"warn", note:"Parse error: " + (e.message||e) }; }
+}
+
+/* ================= Results ================= */
+function flatRows(){
+  const rows = [];
+  state.results.forEach(r => {
+    if (r.trades?.length) r.trades.forEach(t => rows.push({
+      id:r.id, file:r.file, status:r.status, password:r.password, broker:r.broker,
+      scrip:t.scrip, isin:t.isin, side:t.side, qty:t.qty, wap:t.wap, gross:t.gross, basis:t.basis, conf:t.conf, fills:t.fills,
+      client:r.client, acct:r.acct, acctStatus:r.acctStatus, tradeDate:t.tradeDate || r.tradeDate }));
+    else rows.push({ id:r.id, file:r.file, status:r.status, password:r.password, broker:r.broker,
+      scrip:null, isin:"", side:null, qty:null, wap:null, gross:NaN, basis:"", client:r.client, acct:r.acct, acctStatus:r.acctStatus, tradeDate:r.tradeDate, note:r.note });
+  });
+  return rows;
+}
+
+const statusStamp = s => s==="ok" ? `<span class="stamp ok">✅ Extracted</span>`
+  : s==="lock" ? `<span class="stamp lock">🔒 Password failed</span>`
+  : `<span class="stamp warn">⚠️ Parse issue</span>`;
+const NF = `<span class="nf">Not found</span>`;
+const fmtNum = n => Number.isInteger(n) ? n.toLocaleString("en-IN") : n.toLocaleString("en-IN",{maximumFractionDigits:3});
+const fmtMoney = n => "₹" + n.toLocaleString("en-IN",{minimumFractionDigits:2, maximumFractionDigits:2});
+
+function renderResults(){
+  const body = $("#resultsBody");
+  let rows = flatRows();
+  if (!rows.length){
+    body.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="ic">🧾</div><p>Add contract notes and passwords, then run the extractor. Results land here.</p></div></td></tr>`;
+    return;
+  }
+  if (state.sort.key) rows = sortRows(rows, state.sort.key, state.sort.dir);
+  body.innerHTML = rows.map(r => `<tr>
+    <td>
+      <div class="fn">${statusStamp(r.status)}</div>
+      <div class="fn" style="margin-top:5px">${esc(r.file)}</div>
+      ${r.broker?`<div class="pw-used">${esc(r.broker)}</div>`:""}
+      ${r.note?`<div class="pw-used">${esc(r.note)}</div>`:""}
+      ${r.status!=="lock"?`<button class="inspect" data-inspect="${r.id}">🔍 Inspect text</button>`:`<button class="rowbtn lock" data-unlock="${r.id}">🔑 Enter password</button>`}
+    </td>
+    <td>${r.client?esc(r.client):NF}${
+      r.client ? (r.acct
+        ? `<span class="acct ${r.acctStatus==="manual"?"ok":"ok"}">🏦 ${esc(r.acct)}</span>`
+        : `<span class="acct ${r.acctStatus==="suggest"||r.acctStatus==="ambiguous"?"sugg":"miss"}" data-acct="1" title="Click to add a trading account">⚠ no account — add</span>`) : ""}</td>
+    <td>${r.scrip?`<span class="scrip">${esc(r.scrip)}</span>${r.isin?`<span class="isin">${esc(r.isin)}</span>`:""}`:NF}</td>
+    <td>${r.side?`<span class="side ${r.side==="Buy"?"buy":"sell"}">${r.side==="Buy"?"▲ Buy":"▼ Sell"}</span>`:`<span class="side na">—</span>`}</td>
+    <td class="n">${r.qty!=null&&!isNaN(r.qty)?fmtNum(r.qty):NF}${r.fills>1?`<span class="basis">${r.fills} fills</span>`:""}</td>
+    <td class="n">${r.wap!=null&&!isNaN(r.wap)?fmtMoney(r.wap):NF}${r.basis?`<span class="basis">${esc(r.basis)}</span>`:""}${r.conf?`<span class="conf-badge conf-${esc(r.conf==='manual'?'verified':r.conf)}">${esc({verified:'PROVEN',computed:'COMPUTED',stated:'AS LABELLED',gross:'UNVERIFIED',manual:'CONFIRMED'}[r.conf]||r.conf)}</span>`:""}</td>
+    <td>${r.tradeDate?esc(r.tradeDate):NF}</td></tr>`).join("");
+
+  body.querySelectorAll("[data-inspect]").forEach(b =>
+    b.onclick = () => openInspect(Number(b.dataset.inspect)));
+  body.querySelectorAll("[data-unlock]").forEach(b =>
+    b.onclick = () => openFailModal(lockedResults()));
+  body.querySelectorAll("[data-acct]").forEach(b =>
+    b.onclick = () => openAcctModal());
+}
+
+function sortRows(rows, key, dir){
+  const val = r => (key==="qty"||key==="wap")
+    ? ((r[key]==null||isNaN(r[key])) ? -Infinity : r[key])
+    : (r[key]==null ? "" : String(r[key])).toLowerCase();
+  return [...rows].sort((a,b)=>{ const va=val(a), vb=val(b); return va<vb?-dir : va>vb?dir : 0; });
+}
+
+document.querySelectorAll("#resultsTable thead th").forEach(th => {
+  th.onclick = () => {
+    const key = th.dataset.key;
+    if (state.sort.key === key) state.sort.dir *= -1; else { state.sort.key = key; state.sort.dir = 1; }
+    document.querySelectorAll("#resultsTable thead th").forEach(x => {
+      x.classList.remove("sorted"); const ar = x.querySelector(".ar"); if (ar) ar.textContent = "↕";
+    });
+    th.classList.add("sorted");
+    th.querySelector(".ar").textContent = state.sort.dir > 0 ? "↑" : "↓";
+    renderResults();
+  };
+});
+
+/* ================= Exports ================= */
+function refreshExportButtons(){
+  const has = flatRows().some(r => r.scrip);
+  const any = state.results.length > 0;
+  $("#expXlsx").disabled = !has; $("#expCsv").disabled = !has;
+  $("#expTpl").disabled = !(has && state.template);
+  $("#clearResults").disabled = !any;
+}
+
+// Clear the extracted rows only. Uploaded PDFs and the client master are kept,
+// so you can re-run without re-loading.
+$("#clearResults").onclick = () => {
+  if (!state.results.length){ toast("No records to clear."); return; }
+  state.results = [];
+  state.sort = { key: null, dir: 1 };
+  renderResults(); refreshExportButtons(); updateWarnBar(); updateBlockBar(); updateLockBar();
+  toast("Records cleared — PDFs and passwords kept.");
+};
+const exportRows = () => flatRows().map(r => ({
+  "File": r.file,
+  "Status": r.status==="ok"?"Extracted":r.status==="lock"?"Password failed":"Parse issue",
+  "Trading Account": r.acct || "Not found",
+  "Customer Name": r.client || "Not found",
+  "Broker": r.broker || "",
+  "Security / Scrip": r.scrip || "Not found",
+  "ISIN": r.isin || "",
+  "Buy/Sell": r.side || "",
+  "Net Quantity": (r.qty!=null&&!isNaN(r.qty)) ? r.qty : "Not found",
+  "WAP (incl. brokerage)": (r.wap!=null&&!isNaN(r.wap)) ? Number(r.wap.toFixed(4)) : "Not found",
+  "WAP Basis": r.basis || "",
+  "Trade Date": r.tradeDate || "Not found",
+}));
+$("#expXlsx").onclick = () => {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows()), "Contract Notes");
+  XLSX.writeFile(wb, "contract-note-extract.xlsx");
+};
+$("#expCsv").onclick = () => {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(exportRows()));
+  downloadBlob(new Blob([csv],{type:"text/csv"}), "contract-note-extract.csv");
+};
+
+/* ================= Inspect (diagnostics) ================= */
+const inspectOverlay = $("#inspectOverlay");
+$("#closeInspect").onclick = () => inspectOverlay.classList.remove("on");
+inspectOverlay.addEventListener("click", e => { if (e.target===inspectOverlay) inspectOverlay.classList.remove("on"); });
+
+function openInspect(id){
+  const r = state.results.find(x => x.id === id);
+  if (!r) return;
+  $("#inspTitle").textContent = r.file;
+  const d = r.diag;
+  $("#diagSummary").innerHTML = d
+    ? `Header detected: <b>${esc(d.header).slice(0,220)}</b><br>Columns mapped: <b>${esc((d.roles||[]).join(", ")) || "none"}</b>`
+    : `No trade-table header was matched. ${r.lines?.length ? "The text below is what the PDF exposes." : "This PDF has no text layer — it is likely a scanned image, which needs OCR."}`;
+  const kw = /(security|scrip|description|quantity|qty|rate|brokerage|net|buy|sell|contract note)/i;
+  $("#dumpBox").innerHTML = (r.lines||[]).map((t,i) =>
+    `${String(i).padStart(3," ")} │ ${kw.test(t) ? `<span class="hl">${esc(t)}</span>` : esc(t)}`).join("\n") || "(empty)";
+  $("#copyDump").onclick = async () => {
+    try{ await navigator.clipboard.writeText((r.lines||[]).join("\n")); toast("Text layer copied."); }
+    catch(e){ toast("Copy blocked — select the text manually."); }
+  };
+  inspectOverlay.classList.add("on");
+}
+
+/* ================= Fail modal ================= */
+const overlay = $("#overlay");
+$("#closeModal").onclick = () => overlay.classList.remove("on");
+overlay.addEventListener("click", e => { if (e.target===overlay) overlay.classList.remove("on"); });
+document.addEventListener("keydown", e => {
+  if (e.key==="Escape"){ overlay.classList.remove("on"); inspectOverlay.classList.remove("on"); }
+});
+
+function openFailModal(failed){
+  const box = $("#failList"); box.innerHTML = "";
+  failed.forEach(r => {
+    const p = state.pdfs.find(x => x.id === r.id);
+    const card = el("div","failfile");
+    card.innerHTML = `
+      <div class="ftop"><span class="lk">🔒</span><span>${esc(r.file)}</span></div>
+      <div class="retry-row">
+        <input type="password" placeholder="Enter password for this file…" autocomplete="off" />
+        <button class="rb">Retry</button>
+      </div>
+      <div class="fmsg"></div>`;
+    const input = card.querySelector("input[type=password]");
+    const msg = card.querySelector(".fmsg");
+    const retry = card.querySelector(".rb");
+    const attempt = async () => {
+      const val = input.value.trim();
+      if (!val){ msg.className="fmsg bad"; msg.textContent="Type a password to try."; return; }
+      retry.disabled = true; msg.className="fmsg"; msg.textContent="Trying…";
+      try{
+        const opened = await openPdf(p.bytes, [val]);
+        if (!opened){ msg.className="fmsg bad"; msg.textContent="That password didn't open the file."; retry.disabled=false; return; }
+        if (!state.passwords.includes(val)) state.passwords.push(val);   // remember for this session
+        const fresh = await extractFrom(p, opened);
+        const idx = state.results.findIndex(x => x.id === r.id);
+        if (idx>=0) state.results[idx] = fresh; else state.results.push(fresh);
+        recomputeAccounts();
+        card.classList.add("solved");
+        card.querySelector(".ftop").innerHTML = `<span>✅</span><span>${esc(r.file)} — unlocked</span>`;
+        card.querySelector(".retry-row").style.display="none";
+        msg.className="fmsg good";
+        msg.textContent = fresh.status==="ok" ? "Unlocked and extracted." : "Unlocked, but no trades were parsed — use Inspect text.";
+      } catch(err){ msg.className="fmsg bad"; msg.textContent="Could not read the file with that password."; retry.disabled=false; }
+    };
+    retry.onclick = attempt;
+    input.addEventListener("keydown", e => { if (e.key==="Enter") attempt(); });
+    box.append(card);
+  });
+  overlay.classList.add("on");
+  setTimeout(()=> box.querySelector("input")?.focus(), 260);
+}
+
+/* ================= Client-name matching ================= */
+const HONORIFIC = /^(MR|MRS|MS|MISS|SHRI|SHREE|SRI|SMT|DR|PROF|MESSRS|MASTER|KUM)$/;
+const ENTITY_TOKENS = {
+  HUF:   /^(HUF)$/,
+  CORP:  /^(PVT|PRIVATE|LTD|LIMITED|LLP|INC|CORP|CORPORATION|COMPANY)$/,
+  TRUST: /^(TRUST|TRUSTEE|TRUSTEES)$/,
+  FIRM:  /^(AOP|BOI|PARTNERSHIP)$/,
+};
+function normTokens(raw){
+  const up = String(raw||"").toUpperCase().replace(/[.,&\-\/()_'"]+/g," ").replace(/\s+/g," ").trim();
+  let toks = up ? up.split(" ") : [];
+  toks = toks.filter(t => !HONORIFIC.test(t));
+  let entity = "IND"; const kept = [];
+  for (const t of toks){
+    let isEnt = false;
+    for (const [cls,re] of Object.entries(ENTITY_TOKENS)){
+      if (re.test(t)){ if (entity==="IND") entity = cls; isEnt = true; break; }
+    }
+    if (!isEnt) kept.push(t);
+  }
+  return { tokens: kept, entity };
+}
+function lev(a,b){
+  if (a===b) return 0;
+  const m=a.length,n=b.length; if(!m||!n) return Math.max(m,n);
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur; }
+  return prev[n];
+}
+const ratio = (a,b) => { const L=Math.max(a.length,b.length); return L ? 1-lev(a,b)/L : 1; };
+function tokenSim(a,b){
+  if (a===b) return 1;
+  if (a.length===1 || b.length===1){
+    const [ini,full] = a.length===1 ? [a,b] : [b,a];
+    return full[0]===ini ? 0.9 : 0;
+  }
+  const r = ratio(a,b);
+  return r >= 0.82 ? r*0.95 : 0;
+}
+function coverage(A,B){
+  const [short,long] = A.length<=B.length ? [A,B] : [B,A];
+  const used = new Set(); let total = 0;
+  for (const t of short){
+    let best=0,bi=-1;
+    long.forEach((u,i)=>{ if(used.has(i)) return; const s=tokenSim(t,u); if(s>best){best=s;bi=i;} });
+    if (bi>=0) used.add(bi);
+    total += best;
+  }
+  return short.length ? total/short.length : 0;
+}
+function scoreNames(a,b){
+  const A=normTokens(a), B=normTokens(b);
+  if (!A.tokens.length || !B.tokens.length) return 0;
+  if (A.entity !== B.entity) return 0;                 // HUF never merges with an individual
+  const cov = coverage(A.tokens,B.tokens);
+  let score = cov*100;
+  if (Math.min(A.tokens.length,B.tokens.length)===1) score = Math.min(score,70);
+  if (A.tokens.length===B.tokens.length && cov>0.999) score = 100;
+  return Math.round(score);
+}
+const AUTO_MATCH = 93, SUGGEST_MATCH = 75;
+function matchClient(name, master){
+  if (!name) return { status:"none", candidates:[] };
+  const scored = master.map(m => ({ ...m, score: scoreNames(name,m.name) })).sort((x,y)=>y.score-x.score);
+  const top = scored[0];
+  if (!top || top.score < SUGGEST_MATCH) return { status:"none", candidates: scored.filter(s=>s.score>0).slice(0,3) };
+  const tied = scored.filter(s => s.score>=AUTO_MATCH && top.score-s.score<=3);
+  if (top.score>=AUTO_MATCH && tied.length>1) return { status:"ambiguous", candidates: tied.slice(0,4) };
+  if (top.score>=AUTO_MATCH) return { status:"matched", match: top, candidates: scored.slice(0,3) };
+  return { status:"suggest", match: top, candidates: scored.slice(0,3) };
+}
+
+/* ---- trade date -> YYYY-MM-DD ---- */
+const MONTHS = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+const yr2 = y => y<100 ? (y>=70 ? 1900+y : 2000+y) : y;
+function isoDate(y,m,d){
+  if(!y||!m||!d||m<1||m>12||d<1||d>31) return "";
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function toISODate(s){
+  if (!s) return "";
+  const t = String(s).trim().toUpperCase().replace(/\s+/g," ");
+  let m;
+  if ((m=t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) return isoDate(+m[1],+m[2],+m[3]);
+  if ((m=t.match(/^(\d{1,2})[-\/. ]([A-Z]{3,9})[-\/. ](\d{2,4})$/)) && MONTHS[m[2].slice(0,3)])
+    return isoDate(yr2(+m[3]), MONTHS[m[2].slice(0,3)], +m[1]);
+  if ((m=t.match(/^([A-Z]{3,9})[-\/. ](\d{1,2})[-\/. ](\d{2,4})$/)) && MONTHS[m[1].slice(0,3)])
+    return isoDate(yr2(+m[3]), MONTHS[m[1].slice(0,3)], +m[2]);
+  if ((m=t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/))){
+    let d=+m[1], mo=+m[2];
+    if (d<=12 && mo>12){ const tmp=d; d=mo; mo=tmp; }
+    return isoDate(yr2(+m[3]), mo, d);
+  }
+  return "";
+}
+
+/* ================= Client master (name · trading account · password) =================
+   ONE file replaces the former separate "Trading account master" and "Password
+   book". Each row carries the client name, trading account number and one or more
+   passwords. On import it feeds both lookups the rest of the tool already uses:
+     - state.master       [{name, acct}]  -> account matched to the client name
+                                             printed inside the contract note
+     - state.passwordBook [{name, pw}]    -> passwords tried for every PDF whose
+                                             file name ends in "_<client name>"
+   Importing a new file REPLACES the saved master (it is the single source of truth). */
+const clientInput = $("#clientInput");
+$("#importClients").onclick = () => clientInput.click();
+clientInput.onchange = e => { if (e.target.files[0]) importClients(e.target.files[0]); clientInput.value=""; };
+
+const ACCT_HDR = /(trading\s*a\/?c|trading\s*account|trading\s*\/?\s*back\s*office\s*code|back\s*office\s*code|backoffice\s*code|trading\s*code|account\s*(no|number|code)|ucc|client\s*code|dp\s*code)/i;
+const NAME_HDR = /(client\s*name|name|holder|customer)/i;
+const PW_HDR   = /(password|pass\s*word|\bpwd\b|\bpass\b|passcode|passkey|\bpin\b)/i;
+const pwNum    = h => { const m = String(h).match(/(\d+)\s*$/); return m ? parseInt(m[1],10) : 0; };
+const looksLikeAcct = v => /\d/.test(v) && /^[A-Za-z0-9\-\/]{3,20}$/.test(v);
+
+async function readSheetRows(file){
+  if (/\.txt$/i.test(file.name))
+    return (await file.text()).split(/\r?\n/).filter(Boolean).map(l => l.split(/\t|,|\||;/).map(s=>s.trim()));
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type:"array" });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:false, defval:"" })
+    .map(r => r.map(c => String(c==null?"":c).trim()));
+}
+
+async function importClients(file){
+  try{
+    const rows = (await readSheetRows(file)).filter(r => r.some(c => c));
+    if (!rows.length){ toast("That file looked empty."); return; }
+
+    // 1) Headers: every password column (Password, Password 1, Pwd2 …), then the
+    //    account column, then the name column — each column claimed only once.
+    const head = rows[0].map(s => String(s).trim());
+    let nameCol = -1, acctCol = -1, pwCols = [], start = 0;
+    head.forEach((h,i) => { if (PW_HDR.test(h)) pwCols.push(i); });
+    head.forEach((h,i) => { if (acctCol<0 && !pwCols.includes(i) && ACCT_HDR.test(h)) acctCol = i; });
+    head.forEach((h,i) => { if (nameCol<0 && !pwCols.includes(i) && i!==acctCol && NAME_HDR.test(h)) nameCol = i; });
+    if (nameCol>=0 || acctCol>=0 || pwCols.length) start = 1;
+
+    // 2) No / partial headers: detect by content. Name = the most text-like column;
+    //    account = the first remaining column of short codes with digits; every
+    //    other filled column = passwords (in left-to-right order).
+    const body = rows.slice(start);
+    const ncols = Math.max(head.length, ...body.map(r => r.length));
+    const used = c => c===nameCol || c===acctCol || pwCols.includes(c);
+    const vals = c => body.map(r => (r[c]||"").trim()).filter(Boolean);
+    if (nameCol < 0){
+      let best = -1, bestScore = 0;
+      for (let c=0;c<ncols;c++){
+        if (used(c)) continue;
+        const v = vals(c); if (!v.length) continue;
+        const s = v.filter(x => /[A-Za-z]{2,}/.test(x) && !/\d/.test(x)).length / v.length;
+        if (s > bestScore){ bestScore = s; best = c; }
+      }
+      if (bestScore > 0.5) nameCol = best;
+    }
+    if (acctCol < 0){
+      for (let c=0;c<ncols;c++){
+        if (used(c)) continue;
+        const v = vals(c); if (!v.length) continue;
+        if (v.filter(looksLikeAcct).length / v.length > 0.5){ acctCol = c; break; }
+      }
+    }
+    if (!pwCols.length){
+      for (let c=0;c<ncols;c++) if (!used(c) && vals(c).length) pwCols.push(c);
+    }
+    pwCols.sort((a,b) => (pwNum(head[a]) - pwNum(head[b])) || (a - b));   // Password, 1, 2, 3 …
+
+    if (nameCol < 0){ toast("Couldn't find the client name column."); return; }
+    if (acctCol < 0 && !pwCols.length){ toast("Couldn't find trading account or password columns."); return; }
+
+    const master = [], book = [];
+    body.forEach(r => {
+      const name = (r[nameCol]||"").trim();
+      if (!name) return;
+      const acct = acctCol >= 0 ? (r[acctCol]||"").trim() : "";
+      if (acct && !master.some(m => m.name.toUpperCase()===name.toUpperCase() && m.acct===acct))
+        master.push({ name, acct });
+      for (const c of pwCols){
+        const pw = (r[c]||"").trim();
+        if (pw && !book.some(e => e.name===name && e.pw===pw)) book.push({ name, pw });
+      }
+    });
+    if (!master.length && !book.length){ toast("No client rows found."); return; }
+
+    state.master = master; state.passwordBook = book;
+    saveMaster(); savePwBook(); renderClients(); openClients(true); recomputeAccounts();
+    const n = clientGroups().length;
+    toast(`Loaded ${n} client${n>1?"s":""} · ${master.length} account${master.length===1?"":"s"} · ${book.length} password${book.length===1?"":"s"}.`);
+  } catch(err){ toast("Could not read that file."); }
+}
+
+/* Name -> password lookup by PDF file name.
+   Read the client name from the END of each PDF's file name (the text after the
+   last "_", before the extension). The same name may appear on several rows with
+   different passwords, so ALL of them are collected and tried. */
+const PWB_LS_KEY = "cne_password_book_v1";
+const pwbNorm = s => String(s||"")
+  .toLowerCase()
+  .replace(/\.(pdf|xlsx?|csv|txt)$/i,"")
+  .replace(/[._\-]+/g," ")      // treat _ . - as spaces
+  .replace(/[^a-z0-9 ]+/g,"")    // drop other punctuation (commas, dots in pvt. ltd.)
+  .replace(/\s+/g," ").trim();
+
+// client name from the end of a file name: text after the LAST underscore.
+function nameFromFile(fileName){
+  let base = String(fileName||"").replace(/\.[A-Za-z0-9]+$/,"");   // strip extension
+  const cut = base.lastIndexOf("_");
+  if (cut >= 0) base = base.slice(cut+1);
+  return base.trim();
+}
+
+// every password in the master whose name matches this file's trailing name.
+function passwordsForFile(fileName){
+  if (!state.passwordBook.length) return [];
+  const target = pwbNorm(nameFromFile(fileName));
+  if (!target) return [];
+  const out = [];
+  for (const e of state.passwordBook){
+    if (pwbNorm(e.name) === target && e.pw && !out.includes(e.pw)) out.push(e.pw);
+  }
+  return out;
+}
+
+function savePwBook(){
+  try { localStorage.setItem(PWB_LS_KEY, JSON.stringify(state.passwordBook)); } catch(e){}
+}
+function loadPwBook(){
+  try {
+    const raw = localStorage.getItem(PWB_LS_KEY);
+    if (raw){ const arr = JSON.parse(raw); if (Array.isArray(arr)) state.passwordBook = arr.filter(e=>e&&e.name); }
+  } catch(e){}
+}
+
+/* ---- Trading accounts: persisted in localStorage ---- */
+const MST_LS_KEY = "cne_master_v1";
+function saveMaster(){ try { localStorage.setItem(MST_LS_KEY, JSON.stringify(state.master)); } catch(e){} }
+function loadMaster(){
+  try {
+    const raw = localStorage.getItem(MST_LS_KEY);
+    if (raw){ const arr = JSON.parse(raw); if (Array.isArray(arr)) state.master = arr.filter(m=>m&&m.name); }
+  } catch(e){}
+}
+
+/* One row per client (case-insensitive name), joining accounts and passwords. */
+function clientGroups(){
+  const map = new Map();
+  const get = name => {
+    const k = String(name).trim().toUpperCase();
+    if (!map.has(k)) map.set(k, { key:k, name:String(name).trim(), accts:[], pws:[] });
+    return map.get(k);
+  };
+  state.master.forEach(m => { const g = get(m.name); if (m.acct && !g.accts.includes(m.acct)) g.accts.push(m.acct); });
+  state.passwordBook.forEach(e => { const g = get(e.name); if (e.pw && !g.pws.includes(e.pw)) g.pws.push(e.pw); });
+  return [...map.values()];
+}
+
+const cmToggle = $("#cmToggle"), cmListEl = $("#cmList");
+cmToggle.onclick = () => openClients(!cmListEl.classList.contains("open"));
+function openClients(o){ cmListEl.classList.toggle("open",o); cmToggle.classList.toggle("open",o); }
+
+let cmRevealed = false;
+function renderClients(){
+  const groups = clientGroups();
+  $("#cmCount").textContent = groups.length + (groups.length===1?" client":" clients");
+  $("#cmToggleCount").textContent = `(${groups.length})`;
+  cmListEl.innerHTML = "";
+  if (!groups.length){ cmListEl.append(el("div","pw-empty","No client master loaded yet.")); return; }
+
+  const bar = el("div"); bar.style.cssText = "display:flex;justify-content:flex-end;margin-bottom:6px";
+  const reveal = el("button","reveal-btn", cmRevealed ? "🙈 Hide" : "👁 Reveal");
+  reveal.onclick = () => { cmRevealed = !cmRevealed; renderClients(); };
+  bar.append(reveal); cmListEl.append(bar);
+
+  if (!cmRevealed){
+    cmListEl.append(el("div","masked-note",
+      `${groups.length} clients loaded and hidden. They're used for matching and unlocking but kept off-screen.`));
+    return;
+  }
+  const hd = el("div","cmrow head");
+  hd.append(el("span"), el("span",null,"Client name"), el("span",null,"Trading account"), el("span",null,"Password(s)"), el("span"));
+  cmListEl.append(hd);
+  groups.forEach((g,i) => {
+    const row = el("div","cmrow");
+    row.append(el("span","idx",String(i+1)), el("span",null,g.name));
+    const ac = el("span","ac", g.accts.length ? g.accts.join(", ") : "none"); if (!g.accts.length) ac.classList.add("none");
+    const pw = el("span","pw", g.pws.length ? g.pws.join(", ") : "none"); if (!g.pws.length) pw.classList.add("none");
+    const del = el("button","del","×"); del.title = "Remove this client";
+    del.onclick = () => {
+      state.master = state.master.filter(m => m.name.trim().toUpperCase() !== g.key);
+      state.passwordBook = state.passwordBook.filter(e => e.name.trim().toUpperCase() !== g.key);
+      saveMaster(); savePwBook(); renderClients(); recomputeAccounts();
+    };
+    row.append(ac, pw, del); cmListEl.append(row);
+  });
+}
+// The rest of the tool (e.g. the missing-account modal) refreshes the list via these.
+const renderMaster = renderClients, renderPwBook = renderClients;
+
+$("#dlClients").onclick = () => {
+  const groups = clientGroups();
+  if (!groups.length){ toast("No clients to export."); return; }
+  const maxPw = Math.max(1, ...groups.map(g => g.pws.length));
+  const hdr = ["Client Name","Trading Account"];
+  for (let k=0;k<maxPw;k++) hdr.push(k ? `Password ${k+1}` : "Password");
+  const ws = XLSX.utils.aoa_to_sheet([hdr, ...groups.map(g => [g.name, g.accts.join(", "), ...g.pws])]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Client Master");
+  XLSX.writeFile(wb, "client-master.xlsx");
+};
+$("#clearClients").onclick = () => {
+  if (!state.master.length && !state.passwordBook.length){ toast("Client master is already empty."); return; }
+  if (!confirm("Clear the saved client master (accounts and passwords)?")) return;
+  state.master = []; state.passwordBook = [];
+  saveMaster(); savePwBook(); renderClients(); recomputeAccounts();
+  toast("Client master cleared.");
+};
+
+/* ---- Last uploaded contract notes: persisted in IndexedDB (binary-safe) ----
+   PDFs can be large, so they go in IndexedDB rather than localStorage. Feature-
+   detected: if IndexedDB is unavailable the tool simply doesn't persist files. */
+const IDB_NAME = "cne_store", IDB_STORE = "pdfs", IDB_TPL = "tpl", IDB_VER = 2;
+function idbOpen(){
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error("no-idb"));
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE, { keyPath:"id" });
+      if (!db.objectStoreNames.contains(IDB_TPL)) db.createObjectStore(IDB_TPL);
+    };
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function savePdfs(){
+  try{
+    const db = await idbOpen();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    const st = tx.objectStore(IDB_STORE);
+    st.clear();
+    state.pdfs.forEach(p => st.put({ id:p.id, name:p.name, size:p.size, bytes:p.bytes }));
+    await new Promise((r,j)=>{ tx.oncomplete=r; tx.onerror=()=>j(tx.error); });
+    db.close();
+  } catch(e){ /* persistence unavailable — ignore */ }
+}
+async function loadPdfs(){
+  try{
+    const db = await idbOpen();
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const rows = await new Promise((r,j)=>{ const q = tx.objectStore(IDB_STORE).getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=()=>j(q.error); });
+    db.close();
+    rows.forEach(row => {
+      const bytes = row.bytes instanceof Uint8Array ? row.bytes : new Uint8Array(row.bytes);
+      state.pdfs.push({ id: row.id, name: row.name, size: row.size, bytes });
+      if (row.id >= idSeq) idSeq = row.id + 1;
+    });
+  } catch(e){ /* nothing saved / unavailable */ }
+}
+async function clearSavedPdfs(){ try{ const db=await idbOpen(); const tx=db.transaction(IDB_STORE,"readwrite"); tx.objectStore(IDB_STORE).clear(); db.close(); }catch(e){} }
+
+/* ---- Output template: bytes in IndexedDB, name + settings in localStorage ---- */
+const TPL_LS_KEY = "cne_template_meta_v1";
+function saveTemplateMeta(){
+  try { localStorage.setItem(TPL_LS_KEY, JSON.stringify({ name: state.templateName, settings: state.settings })); } catch(e){}
+}
+async function saveTemplate(){
+  try{
+    const db = await idbOpen();
+    const tx = db.transaction(IDB_TPL, "readwrite");
+    if (state.template) tx.objectStore(IDB_TPL).put(state.template, "current");
+    else tx.objectStore(IDB_TPL).delete("current");
+    await new Promise((r,j)=>{ tx.oncomplete=r; tx.onerror=()=>j(tx.error); });
+    db.close();
+  } catch(e){}
+  saveTemplateMeta();
+}
+async function loadTemplate(){
+  try {
+    const meta = JSON.parse(localStorage.getItem(TPL_LS_KEY) || "null");
+    if (meta){ if (meta.name) state.templateName = meta.name; if (meta.settings) state.settings = { ...state.settings, ...meta.settings }; }
+  } catch(e){}
+  try{
+    const db = await idbOpen();
+    const tx = db.transaction(IDB_TPL, "readonly");
+    const val = await new Promise((r,j)=>{ const q = tx.objectStore(IDB_TPL).get("current"); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); });
+    db.close();
+    if (val) state.template = val instanceof Uint8Array ? val : new Uint8Array(val);
+  } catch(e){}
+}
+function applyTemplateUI(){
+  if (state.template){ $("#tplState").textContent = "loaded"; $("#tplName").textContent = "📗 " + (state.templateName || "Template.xlsx"); }
+  const map = { setTradeType:"tradeType", setCategory:"category", setPrice:"price", setKeep:"keep" };
+  for (const [id,key] of Object.entries(map)){ const elx = $("#"+id); if (elx && state.settings[key]!=null) elx.value = state.settings[key]; }
+}
+
+/* ================= Template ================= */
+const tplInput = $("#tplInput");
+$("#importTpl").onclick = () => tplInput.click();
+tplInput.onchange = async e => {
+  const f = e.target.files[0]; tplInput.value = "";
+  if (!f) return;
+  state.template = new Uint8Array(await f.arrayBuffer());
+  state.templateName = f.name;
+  $("#tplState").textContent = "loaded";
+  $("#tplName").textContent = "📗 " + f.name;
+  refreshExportButtons();
+  saveTemplate();
+  toast("Template loaded.");
+};
+["setTradeType","setCategory","setPrice","setKeep"].forEach(id => {
+  $("#"+id).onchange = e => {
+    const map = { setTradeType:"tradeType", setCategory:"category", setPrice:"price", setKeep:"keep" };
+    state.settings[map[id]] = e.target.value;
+    saveTemplateMeta();
+    renderResults();
+  };
+});
+
+/* ================= Account resolution ================= */
+function recomputeAccounts(){
+  state.results.forEach(r => {
+    if (!r.client){ r.acct = ""; r.acctStatus = "noclient"; return; }
+    const m = matchClient(r.client, state.master);
+    r.acctStatus = m.status;
+    r.acct = m.status === "matched" ? m.match.acct : "";   // only from the uploaded master file
+    r.candidates = m.candidates || [];
+  });
+  renderResults(); refreshExportButtons(); updateWarnBar(); updateBlockBar(); updateLockBar();
+}
+
+function unresolvedClients(){
+  const seen = new Map();
+  state.results.forEach(r => {
+    if (!r.trades?.length || !r.client) return;
+    if (r.acctStatus === "matched") return;
+    if (!seen.has(r.client)) seen.set(r.client, { client:r.client, status:r.acctStatus, candidates:r.candidates||[], files:[] });
+    seen.get(r.client).files.push(r.file);
+  });
+  return [...seen.values()];
+}
+
+// Files that didn't open with any known password — can always be re-opened for
+// manual password entry (so nothing gets permanently stuck).
+function lockedResults(){ return state.results.filter(r => r.status === "lock"); }
+function updateLockBar(){
+  const bar = $("#lockBar"); if (!bar) return;
+  const locked = lockedResults();
+  if (!locked.length){ bar.classList.remove("on"); bar.innerHTML=""; return; }
+  bar.innerHTML = `<span>🔒 ${locked.length} file${locked.length>1?"s":""} could not be opened with the saved passwords.</span>` +
+    `<button class="lb-btn" id="resolveLockBtn">Enter passwords</button>`;
+  bar.classList.add("on");
+  const b = $("#resolveLockBtn"); if (b) b.onclick = () => openFailModal(lockedResults());
+}
+
+function updateWarnBar(){
+  const bar = $("#warnBar");
+  const msgs = [];
+  const un = unresolvedClients();
+  if (un.length) msgs.push(`${un.length} client name${un.length>1?"s":""} without a trading account`);
+  const noIsin = flatRows().filter(r => r.scrip && !r.isin).length;
+  if (noIsin) msgs.push(`${noIsin} row${noIsin>1?"s":""} without an ISIN (the template needs ISIN, NSE symbol or BSE code)`);
+  const noDate = flatRows().filter(r => r.scrip && !toISODate(r.tradeDate)).length;
+  if (noDate) msgs.push(`${noDate} row${noDate>1?"s":""} without a usable trade date`);
+  if (!msgs.length){ bar.classList.remove("on"); return; }
+  bar.innerHTML = "⚠️ " + msgs.join(" · ") +
+    (un.length ? ` — <a href="#" id="openAcctLink" style="color:inherit">add the missing accounts</a>` : "");
+  bar.classList.add("on");
+  const link = $("#openAcctLink");
+  if (link) link.onclick = e => { e.preventDefault(); openAcctModal(); };
+}
+
+/* ================= Missing-account modal ================= */
+const acctOverlay = $("#acctOverlay");
+$("#closeAcct").onclick = () => acctOverlay.classList.remove("on");
+acctOverlay.addEventListener("click", e => { if (e.target===acctOverlay) acctOverlay.classList.remove("on"); });
+
+function openAcctModal(){
+  const list = unresolvedClients();
+  const box = $("#acctList"); box.innerHTML = "";
+  if (!list.length){
+    box.append(el("div","pw-empty","Every client already has a trading account."));
+  }
+  list.forEach(u => {
+    const card = el("div","failfile");
+    const why = u.status==="ambiguous" ? "more than one close match — pick one"
+              : u.status==="suggest"   ? "only a partial match was found"
+              : "no match in the master file";
+    card.innerHTML = `
+      <div class="ftop"><span class="lk">🏦</span><span>${esc(u.client)}</span></div>
+      <div class="pw-used" style="margin-bottom:8px">${esc(why)} · ${u.files.length} file${u.files.length>1?"s":""}</div>
+      <div class="retry-row">
+        <input type="text" placeholder="Trading account number…" autocomplete="off" />
+        <button class="rb">Save</button>
+      </div>
+      <label class="addopt"><input type="checkbox" checked /> Add to my master list</label>
+      <div class="fmsg"></div>`;
+    const input = card.querySelector("input[type=text]");
+    const chk = card.querySelector("input[type=checkbox]");
+    const msg = card.querySelector(".fmsg");
+
+    if (u.candidates?.length){
+      const cand = el("div","cand");
+      cand.append(Object.assign(el("span","pct"),{textContent:"Did you mean:"}));
+      u.candidates.filter(c=>c.score>0).slice(0,3).forEach(c => {
+        const b = el("button",null,`${c.name} → ${c.acct}`);
+        b.append(Object.assign(el("span","pct"),{textContent:` ${c.score}%`}));
+        b.onclick = () => { input.value = c.acct; input.focus(); };
+        cand.append(b);
+      });
+      if (cand.children.length>1) card.querySelector(".retry-row").before(cand);
+    }
+
+    const save = () => {
+      const v = input.value.trim();
+      if (!v){ msg.className="fmsg bad"; msg.textContent="Enter an account number."; return; }
+      if (chk.checked && !state.master.some(m => m.name.toUpperCase()===u.client.toUpperCase() && m.acct===v))
+        state.master.push({ name:u.client, acct:v });
+      renderMaster();
+      state.results.forEach(r => { if (r.client === u.client){ r.acct = v; r.acctStatus = "manual"; } });
+      renderResults(); refreshExportButtons(); updateWarnBar();
+      card.classList.add("solved");
+      card.querySelector(".ftop").innerHTML = `<span>✅</span><span>${esc(u.client)} → ${esc(v)}</span>`;
+      card.querySelector(".retry-row").style.display = "none";
+      card.querySelector(".addopt").style.display = "none";
+      const c = card.querySelector(".cand"); if (c) c.style.display = "none";
+      msg.className="fmsg good"; msg.textContent="Applied to every row for this client.";
+    };
+    card.querySelector(".rb").onclick = save;
+    input.addEventListener("keydown", e => { if (e.key==="Enter") save(); });
+    box.append(card);
+  });
+  acctOverlay.classList.add("on");
+  setTimeout(()=> box.querySelector("input")?.focus(), 260);
+}
+
+/* ================= Template export ================= */
+function templateRows(){
+  const s = state.settings;
+  return flatRows().filter(r => r.scrip && r.conf !== "gross").map(r => {
+    const price = (s.price==="gross" && !isNaN(r.gross)) ? r.gross : r.wap;
+    return {
+      A: r.acct || "",
+      B: r.client || "",
+      C: toISODate(r.tradeDate),
+      H: r.isin || "",
+      I: s.tradeType,
+      J: r.side === "Sell" ? "SELL" : "PURCHASE",
+      K: (r.qty!=null && !isNaN(r.qty)) ? r.qty : "",
+      L: (price!=null && !isNaN(price)) ? Number(price.toFixed(2)) : "",
+      N: 0,
+      P: s.category,
+      Q: r.side || "",
+    };
+  });
+}
+
+const TPL_COLS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"];
+const TPL_STY  = { A:"7",B:"7",C:"8",D:"7",E:"7",F:"7",G:"7",H:"7",I:"7",J:"7",K:"7",L:"9",M:"7",N:"10",O:"10",P:"10",Q:"10",R:"10" };
+const xesc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function serialDate(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||"");
+  if (!m) return null;
+  return Math.round(Date.UTC(+m[1],+m[2]-1,+m[3])/86400000) + 25569;
+}
+function tplCell(col,r,val,kind){
+  const ref = col+r, s = TPL_STY[col];
+  if (val === "" || val == null) return `<c r="${ref}" s="${s}"/>`;
+  if (kind === "n") return `<c r="${ref}" s="${s}"><v>${val}</v></c>`;
+  return `<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xesc(val)}</t></is></c>`;
+}
+function tplRow(row,r){
+  const cells = TPL_COLS.map(col => {
+    const v = row[col];
+    if (v === "" || v == null) return tplCell(col,r,"");
+    if (col === "N") return tplCell(col,r,Number(v)||0,"n");
+    if (col === "C"){ const sd = serialDate(v); return sd==null ? tplCell(col,r,"") : tplCell(col,r,sd,"n"); }
+    if (col === "K" || col === "L" || col === "N") return tplCell(col,r,v,"n");
+    return tplCell(col,r,v,"s");
+  }).join("");
+  return `<row r="${r}" spans="1:18" s="10" customFormat="1">${cells}</row>`;
+}
+
+/* Append guaranteed cell styles (General, date, 2-dp) to styles.xml and return
+   their indices, so the writer can force the right number format on a column
+   irrespective of the template's existing style table. */
+function injectSafeStyles(sxml){
+  try{
+    // ensure a date numFmt exists (id 164 by our template, but create if absent)
+    let dateFmtId = "14";                 // built-in m/d/yy fallback
+    const custom = sxml.match(/<numFmt numFmtId="(\d+)" formatCode="yyyy[^"]*"/);
+    if (custom) dateFmtId = custom[1];
+    else {
+      // add a custom yyyy-mm-dd format
+      dateFmtId = "170";
+      const nf = `<numFmt numFmtId="170" formatCode="yyyy\\-mm\\-dd;@"/>`;
+      if (/<numFmts[ >]/.test(sxml)){
+        sxml = sxml.replace(/(<numFmts count=")(\d+)(")/, (m,a,c,b)=>a+(+c+1)+b)
+                   .replace(/<numFmts([^>]*)>/, `<numFmts$1>${nf}`);
+      } else {
+        sxml = sxml.replace(/(<styleSheet[^>]*>)/, `$1<numFmts count="1">${nf}</numFmts>`);
+      }
+    }
+    const xfsM = sxml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+    if (!xfsM) return null;
+    const base = +xfsM[1];
+    const general = base, date = base+1, money = base+2;
+    const add =
+      `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>` +
+      `<xf numFmtId="${dateFmtId}" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>` +
+      `<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`;
+    sxml = sxml.replace(/(<cellXfs count=")(\d+)(">)([\s\S]*?)(<\/cellXfs>)/,
+      (m,a,c,b,body,end) => `${a}${base+3}${b}${body}${add}${end}`);
+    return { xml: sxml, general:String(general), date:String(date), money:String(money) };
+  } catch(e){ return null; }
+}
+
+$("#expTpl").onclick = () => {
+  const rows = templateRows();
+  if (!rows.length){ toast("Nothing to write yet."); return; }
+  if (!state.template){ toast("Upload your Template.xlsx first."); return; }
+  if (!(window.XLSX && XLSX.CFB)){ toast("Spreadsheet engine not loaded — refresh the page."); return; }
+  try{
+    // Patch the sheet XML inside the user's own file so its header colours,
+    // comments, date format and validation rules all survive untouched.
+    const cfb = XLSX.CFB.read(state.template, { type:"array" });
+    const idx = cfb.FullPaths.findIndex(p => /xl\/worksheets\/sheet\d+\.xml$/.test(p));
+    if (idx < 0) throw new Error("no worksheet inside the template");
+
+    let xml = bytesToStr(cfb.FileIndex[idx].content);
+    const sd = xml.match(/<sheetData\s*\/>|<sheetData>[\s\S]*?<\/sheetData>/);
+    if (!sd) throw new Error("template sheet has no data block");
+    const body = /<sheetData\s*\/>/.test(sd[0]) ? "" : sd[0].replace(/^<sheetData>/,"").replace(/<\/sheetData>$/,"");
+    let header = (body.match(/<row r="1"[\s\S]*?<\/row>/) || [""])[0];
+    // Total STT is a filled column now, so give N1 the same green style as the
+    // other green headers (taken from B1) if the uploaded template still has it red.
+    const greenS = (header.match(/<c r="B1" s="(\d+)"/) || [])[1];
+    if (greenS) header = header.replace(/<c r="N1" s="\d+"/, `<c r="N1" s="${greenS}"`);
+
+    // ---- Safety layer: guarantee correct number formats per column ----
+    // Append three known-good cell styles to styles.xml (General, date, 2-dp)
+    // and point Quantity/Date/Price at them. This makes the output correct no
+    // matter what style indices the uploaded template happens to use, so a
+    // quantity can never inherit a date format again.
+    const styIdx = cfb.FullPaths.findIndex(p => /xl\/styles\.xml$/.test(p));
+    if (styIdx >= 0){
+      let sxml = bytesToStr(cfb.FileIndex[styIdx].content);
+      const built = injectSafeStyles(sxml);
+      if (built){
+        XLSX.CFB.utils.cfb_add(cfb, cfb.FullPaths[styIdx].replace(/^[^/]*\//,"/"), strToBytes(built.xml));
+        TPL_STY.C = built.date;      // Trade Date  -> yyyy-mm-dd
+        TPL_STY.K = built.general;   // Quantity    -> General integer
+        TPL_STY.N = built.general;   // Total STT   -> General integer
+        TPL_STY.L = built.money;     // Price       -> 0.00
+      }
+    }
+
+    let kept = "", next = 2;
+    if (state.settings.keep === "keep"){
+      kept = header ? body.replace(header,"") : body;
+      const nums = [...body.matchAll(/<row r="(\d+)"/g)].map(m => +m[1]);
+      next = (nums.length ? Math.max(...nums) : 1) + 1;
+    }
+
+    const newRows = rows.map((row,i) => tplRow(row, next+i)).join("");
+    xml = xml.replace(sd[0], `<sheetData>${header}${kept}${newRows}</sheetData>`);
+    xml = xml.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:R${next+rows.length-1}"/>`);
+
+    XLSX.CFB.utils.cfb_add(cfb, cfb.FullPaths[idx].replace(/^[^/]*\//,"/"), strToBytes(xml));
+    const out = XLSX.CFB.write(cfb, { fileType:"zip", type:"array", compression:true });
+    downloadBlob(new Blob([new Uint8Array(out)],
+      { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      (state.templateName||"Template").replace(/\.xlsx$/i,"") + "-filled.xlsx");
+    toast(`Wrote ${rows.length} row${rows.length>1?"s":""} into the template.`);
+  } catch(err){
+    console.error(err);
+    toast("Could not write the template: " + (err.message||err));
+  }
+};
+
+/* UTF-8 helpers (avoid any external zip/text dependency) */
+function bytesToStr(buf){
+  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return new TextDecoder("utf-8").decode(u8);
+}
+function strToBytes(s){ return new TextEncoder().encode(s); }
+
+/* ================= Price verification gate =================
+   A rate that could not be proven to include brokerage must never reach the
+   template silently. Such rows are held back and surfaced for confirmation. */
+function unverifiedRows(){
+  return flatRows().filter(r => r.scrip && r.conf === "gross");
+}
+
+function updateBlockBar(){
+  const bar = $("#blockBar");
+  const bad = unverifiedRows();
+  if (!bad.length){ bar.classList.remove("on"); return; }
+  bar.innerHTML = `⛔ ${bad.length} row${bad.length>1?"s":""} held back from the template — no brokerage figure found, so the after-brokerage price is unproven. ` +
+    `<a href="#" id="openPriceLink">Review and confirm</a>`;
+  bar.classList.add("on");
+  const l = $("#openPriceLink");
+  if (l) l.onclick = e => { e.preventDefault(); openPriceModal(); };
+}
+
+const priceOverlay = $("#priceOverlay");
+$("#closePrice").onclick = () => priceOverlay.classList.remove("on");
+priceOverlay.addEventListener("click", e => { if (e.target===priceOverlay) priceOverlay.classList.remove("on"); });
+
+function openPriceModal(){
+  const bad = unverifiedRows();
+  const box = $("#priceList"); box.innerHTML = "";
+  if (!bad.length){ box.append(el("div","pw-empty","Every price is verified.")); }
+  bad.forEach(r => {
+    const card = el("div","failfile");
+    card.innerHTML = `
+      <div class="ftop"><span class="lk">⚠</span><span>${esc(r.scrip)}</span></div>
+      <div class="pw-used" style="margin-bottom:8px">${esc(r.file)} · ${r.side} · qty ${r.qty} · rate found: ₹${(r.wap||0).toFixed(2)} (brokerage not included)</div>
+      <div class="retry-row">
+        <input type="text" placeholder="After-brokerage rate per share…" autocomplete="off" />
+        <button class="rb">Confirm</button>
+      </div>
+      <label class="addopt"><input type="checkbox" /> This note has no brokerage — use the rate as shown</label>
+      <div class="fmsg"></div>`;
+    const input = card.querySelector("input[type=text]");
+    const asIs  = card.querySelector("input[type=checkbox]");
+    const msg   = card.querySelector(".fmsg");
+    const apply = () => {
+      let v = parseFloat(String(input.value).replace(/[^0-9.]/g,""));
+      if (asIs.checked && !input.value.trim()) v = r.wap;
+      if (isNaN(v) || v <= 0){ msg.className="fmsg bad"; msg.textContent="Enter a rate, or tick the box to accept it as shown."; return; }
+      for (const res of state.results){
+        (res.trades||[]).forEach(t => {
+          if (t.scrip === r.scrip && t.side === r.side && res.file === r.file){
+            t.wap = v;
+            t.conf = asIs.checked && v === r.wap ? "stated" : "manual";
+            t.basis = asIs.checked && v === r.wap ? "No brokerage on this note" : "Entered manually";
+          }
+        });
+      }
+      renderResults(); refreshExportButtons(); updateWarnBar(); updateBlockBar(); updateLockBar();
+      card.classList.add("solved");
+      card.querySelector(".ftop").innerHTML = `<span>✅</span><span>${esc(r.scrip)} — ₹${v.toFixed(2)}</span>`;
+      card.querySelector(".retry-row").style.display="none";
+      card.querySelector(".addopt").style.display="none";
+      msg.className="fmsg good"; msg.textContent="Row released to the template.";
+    };
+    card.querySelector(".rb").onclick = apply;
+    input.addEventListener("keydown", e => { if (e.key==="Enter") apply(); });
+    asIs.onchange = () => { if (asIs.checked) apply(); };
+    box.append(card);
+  });
+  priceOverlay.classList.add("on");
+  setTimeout(()=> box.querySelector("input")?.focus(), 260);
+}
+
+loadMaster();
+loadPwBook();
+renderClients();
+loadPdfs().then(renderPdfChips);
+loadTemplate().then(() => { applyTemplateUI(); refreshExportButtons(); });
+renderResults();
+
+/* ================= Auth, users & sign-in log ================= */
+const AUTH_USERS_KEY="cne_users_v1", AUTH_SESS_KEY="cne_session_v1", AUTH_LOG_KEY="cne_login_log_v1";
+let authUsers=[], authLog=[], authCurrent=null, pendingUser=null;
+const lsGet = k => { try{ return JSON.parse(localStorage.getItem(k)||"null"); }catch(e){ return null; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+const genSalt = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+async function hashPw(pw, salt){
+  const data = salt+"|"+pw;
+  try{ if (window.crypto && crypto.subtle){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+    return "s:"+[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }}catch(e){}
+  let h=5381; for(let i=0;i<data.length;i++) h=((h<<5)+h+data.charCodeAt(i))>>>0;
+  return "h:"+h.toString(16);
+}
+async function makeUser(username, pw, role, mustChange){
+  const salt=genSalt(); return { username, role, salt, hash: await hashPw(pw,salt), disabled:false, mustChange:!!mustChange };
+}
+function saveUsers(){ lsSet(AUTH_USERS_KEY, authUsers); }
+function isAdmin(){ return !!authCurrent && authCurrent.role==="admin"; }
+
+async function authInit(){
+  authUsers = lsGet(AUTH_USERS_KEY) || [];
+  authLog = lsGet(AUTH_LOG_KEY) || [];
+  if (!authUsers.length){ authUsers = [ await makeUser("admin","admin","admin",true) ]; saveUsers(); }
+  let sess = lsGet(AUTH_SESS_KEY);
+  if (!sess){ try{ sess = JSON.parse(sessionStorage.getItem(AUTH_SESS_KEY)||"null"); }catch(e){} }
+  if (sess && sess.username){
+    const u = authUsers.find(x=>x.username===sess.username && !x.disabled);
+    if (u && !u.mustChange){ enterApp(u); return; }
+  }
+  showGate();
+}
+function showGate(){ $("#authGate").style.display="flex"; setTimeout(()=>{ const e=$("#authUser"); if(e&&e.parentElement.style.display!=="none") e.focus(); else $("#authPass").focus(); },30); }
+function hideGate(){ $("#authGate").style.display="none"; }
+
+async function authAttempt(){
+  const msg=$("#authMsg");
+  if (pendingUser){
+    const p1=$("#authPass").value, p2=$("#authPass2").value;
+    if (p1.length<4){ msg.className="auth-msg bad"; msg.textContent="Choose a password of at least 4 characters."; return; }
+    if (p1!==p2){ msg.className="auth-msg bad"; msg.textContent="Passwords don't match."; return; }
+    pendingUser.salt=genSalt(); pendingUser.hash=await hashPw(p1,pendingUser.salt); pendingUser.mustChange=false; saveUsers();
+    const u=pendingUser; pendingUser=null; resetGateUI();
+    enterApp(u, $("#authRemember").checked); return;
+  }
+  const name=$("#authUser").value.trim(), pw=$("#authPass").value;
+  const u=authUsers.find(x=>x.username.toLowerCase()===name.toLowerCase());
+  const ok = !!u && !u.disabled && (await hashPw(pw,u.salt))===u.hash;
+  logLogin(name||"(blank)", ok);
+  if (!ok){ msg.className="auth-msg bad"; msg.textContent=(u&&u.disabled)?"That account is disabled.":"Wrong username or password."; return; }
+  if (u.mustChange){
+    pendingUser=u;
+    $("#authTitle").textContent="Set a new password";
+    $("#authSub").textContent="This is the default account — choose a new password to continue.";
+    $("#authUser").parentElement.style.display="none";
+    $("#authPwLabel").textContent="New password";
+    $("#authPass").value=""; $("#authPass2Wrap").style.display="block";
+    $("#authGo").textContent="Save & continue"; msg.textContent=""; setTimeout(()=>$("#authPass").focus(),30); return;
+  }
+  enterApp(u, $("#authRemember").checked);
+}
+function resetGateUI(){
+  $("#authTitle").textContent="Sign in";
+  $("#authSub").textContent="Enter your username and password to open the tool.";
+  $("#authUser").parentElement.style.display="block";
+  $("#authPwLabel").textContent="Password";
+  $("#authPass2Wrap").style.display="none";
+  $("#authGo").textContent="Sign in";
+  $("#authUser").value=""; $("#authPass").value=""; $("#authPass2").value=""; $("#authMsg").textContent="";
+}
+function enterApp(u, remember){
+  authCurrent=u;
+  const sess={ username:u.username, ts:Date.now() };
+  try{ sessionStorage.setItem(AUTH_SESS_KEY, JSON.stringify(sess)); }catch(e){}
+  if (remember) lsSet(AUTH_SESS_KEY, sess); else localStorage.removeItem(AUTH_SESS_KEY);
+  hideGate();
+  $("#userBox").style.display="flex";
+  $("#whoName").textContent=u.username;
+  $("#whoRole").textContent=u.role;
+  applyRole(); renderUsers(); renderLoginLog();
+}
+function logout(){
+  try{ sessionStorage.removeItem(AUTH_SESS_KEY); }catch(e){}
+  localStorage.removeItem(AUTH_SESS_KEY);
+  authCurrent=null; pendingUser=null; resetGateUI();
+  $("#userBox").style.display="none"; showGate();
+}
+function applyRole(){
+  const admin=isAdmin();
+  const g=$("#dataCardsGrid"); if (g) g.style.display = admin ? "" : "none";
+  const a=$("#adminGrid"); if (a) a.style.display = admin ? "" : "none";
+  const ul=$("#usersLink"); if (ul) ul.style.display = admin ? "" : "none";
+}
+/* users */
+function renderUsers(){
+  if (!isAdmin()) return;
+  $("#userCount").textContent = authUsers.length + (authUsers.length===1?" user":" users");
+  const tb=$("#userRows"); tb.innerHTML="";
+  const activeAdmins = authUsers.filter(x=>x.role==="admin"&&!x.disabled).length;
+  authUsers.forEach(u=>{
+    const tr=el("tr");
+    tr.append(el("td",null,u.username));
+    const rt=el("td"); rt.innerHTML=`<span class="rolebadge ${u.role==='admin'?'':'user'}">${u.role}</span>`; tr.append(rt);
+    tr.append(el("td",null,u.disabled?"disabled":"active"));
+    const act=el("td"); act.style.textAlign="right";
+    const reset=el("button","btn mini","Reset"); reset.onclick=()=>resetUserPw(u.username); act.append(reset);
+    const tog=el("button","btn mini", u.disabled?"Enable":"Disable"); tog.style.marginLeft="6px"; tog.onclick=()=>toggleUser(u.username); act.append(tog);
+    const lastAdmin = u.role==="admin" && activeAdmins<=1;
+    if (u.username!==authCurrent.username && !lastAdmin){
+      const del=el("button","btn mini","✕"); del.title="Delete"; del.style.marginLeft="6px"; del.onclick=()=>deleteUser(u.username); act.append(del);
+    }
+    tr.append(act); tb.append(tr);
+  });
+}
+async function addUserUI(){
+  if (!isAdmin()) return;
+  const name=$("#newUserName").value.trim(), pw=$("#newUserPass").value, role=$("#newUserRole").value;
+  if (!name||!pw){ toast("Enter a username and password."); return; }
+  if (authUsers.some(u=>u.username.toLowerCase()===name.toLowerCase())){ toast("That username already exists."); return; }
+  authUsers.push(await makeUser(name,pw,role,false)); saveUsers(); renderUsers();
+  $("#newUserName").value=""; $("#newUserPass").value=""; toast("User added.");
+}
+async function resetUserPw(username){
+  const np=prompt("New password for "+username+":"); if (np==null) return;
+  if (String(np).length<4){ toast("Password must be at least 4 characters."); return; }
+  const u=authUsers.find(x=>x.username===username); if(!u) return;
+  u.salt=genSalt(); u.hash=await hashPw(np,u.salt); u.mustChange=false; u.disabled=false; saveUsers(); renderUsers();
+  toast("Password reset for "+username+".");
+}
+function toggleUser(username){
+  const u=authUsers.find(x=>x.username===username); if(!u) return;
+  if (u.username===authCurrent.username){ toast("You can't disable your own account."); return; }
+  if (!u.disabled && u.role==="admin" && authUsers.filter(x=>x.role==="admin"&&!x.disabled).length<=1){ toast("Keep at least one active admin."); return; }
+  u.disabled=!u.disabled; saveUsers(); renderUsers();
+}
+function deleteUser(username){
+  if (username===authCurrent.username){ toast("You can't delete your own account."); return; }
+  if (!confirm("Delete user "+username+"?")) return;
+  authUsers=authUsers.filter(x=>x.username!==username); saveUsers(); renderUsers();
+}
+/* sign-in log */
+function logLogin(username, ok){
+  authLog.push({ user:username, ts:Date.now(), ok:!!ok });
+  if (authLog.length>2000) authLog=authLog.slice(-2000);
+  lsSet(AUTH_LOG_KEY, authLog); renderLoginLog();
+}
+function renderLoginLog(){
+  if (!isAdmin()) return;
+  const tb=$("#logRows"); if(!tb) return; tb.innerHTML="";
+  [...authLog].reverse().slice(0,300).forEach(e=>{
+    const tr=el("tr");
+    tr.append(el("td",null,new Date(e.ts).toLocaleString()));
+    tr.append(el("td",null,e.user));
+    const r=el("td"); r.innerHTML=e.ok?'<span class="log-ok">success</span>':'<span class="log-bad">failed</span>'; tr.append(r);
+    tb.append(tr);
+  });
+}
+/* wiring */
+$("#authGo").onclick=authAttempt;
+["authUser","authPass","authPass2"].forEach(id=>{ const e=$("#"+id); if(e) e.addEventListener("keydown",ev=>{ if(ev.key==="Enter") authAttempt(); }); });
+$("#logoutBtn").onclick=logout;
+$("#usersLink").onclick=()=>{ const a=$("#adminGrid"); if(a){ a.scrollIntoView({behavior:"smooth",block:"start"}); } $("#tabUsers").click(); };
+$("#addUserBtn").onclick=addUserUI;
+$("#tabUsers").onclick=()=>{ $("#tabUsers").classList.add("on"); $("#tabLog").classList.remove("on"); $("#usersPane").style.display=""; $("#logPane").style.display="none"; };
+$("#tabLog").onclick=()=>{ $("#tabLog").classList.add("on"); $("#tabUsers").classList.remove("on"); $("#logPane").style.display=""; $("#usersPane").style.display="none"; renderLoginLog(); };
+$("#clearLog").onclick=()=>{ if(!confirm("Clear the entire sign-in log?")) return; authLog=[]; lsSet(AUTH_LOG_KEY,authLog); renderLoginLog(); toast("Sign-in log cleared."); };
+$("#dlLog").onclick=()=>{
+  const rows=[["When","Username","Result"], ...authLog.map(e=>[new Date(e.ts).toLocaleString(), e.user, e.ok?"success":"failed"])];
+  const ws=XLSX.utils.aoa_to_sheet(rows); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sign-in log"); XLSX.writeFile(wb,"sign-in-log.xlsx");
+};
+authInit();
+
+</script>
+</body>
+</html>
