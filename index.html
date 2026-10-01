@@ -697,6 +697,26 @@
   </div>
 </div>
 
+<div class="overlay" id="gapOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gapTitle">
+    <div class="modal-head">
+      <div class="modal-lock" style="background:var(--amber-soft);border-color:var(--amber-line)">📋</div>
+      <div>
+        <h3 id="gapTitle">Complete the client master</h3>
+        <p id="gapSub">Some clients are missing a trading account or password.</p>
+      </div>
+    </div>
+    <div class="modal-body" id="gapList"></div>
+    <div class="modal-foot">
+      <span class="note" id="gapNote"></span>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="closeGap">Cancel</button>
+        <button class="btn green" id="gapDownload" style="white-space:nowrap" disabled>Download master</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 
@@ -2456,7 +2476,7 @@ function renderClients(){
 // The rest of the tool (e.g. the missing-account modal) refreshes the list via these.
 const renderMaster = renderClients, renderPwBook = renderClients;
 
-$("#dlClients").onclick = () => {
+function downloadClientMaster(){
   const groups = clientGroups();
   if (!groups.length){ toast("No clients to export."); return; }
   const maxPw = Math.max(1, ...groups.map(g => g.pws.length));
@@ -2466,7 +2486,80 @@ $("#dlClients").onclick = () => {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Client Master");
   XLSX.writeFile(wb, "client-master.xlsx");
+}
+
+/* Download gate: every client must have BOTH a trading account and a password.
+   If any is missing, a pop-up lists each client with the missing field(s); the
+   download unlocks only once all of them are filled in. */
+const clientGaps = () => clientGroups().filter(g => !g.accts.length || !g.pws.length);
+$("#dlClients").onclick = () => {
+  if (!clientGroups().length){ toast("No clients to export."); return; }
+  if (clientGaps().length) openGapModal(); else downloadClientMaster();
 };
+
+const gapOverlay = $("#gapOverlay");
+$("#closeGap").onclick = () => gapOverlay.classList.remove("on");
+gapOverlay.addEventListener("click", e => { if (e.target===gapOverlay) gapOverlay.classList.remove("on"); });
+$("#gapDownload").onclick = () => {
+  if (clientGaps().length){ toast("Fill in every missing field first."); return; }
+  gapOverlay.classList.remove("on");
+  downloadClientMaster();
+};
+function refreshGapFoot(){
+  const left = clientGaps().length;
+  $("#gapDownload").disabled = left > 0;
+  $("#gapNote").textContent = left
+    ? `${left} client${left>1?"s":""} still incomplete — download locked.`
+    : "All clients complete — ready to download.";
+}
+
+function openGapModal(){
+  const box = $("#gapList"); box.innerHTML = "";
+  const gaps = clientGaps();
+  $("#gapSub").textContent = `${gaps.length} client${gaps.length>1?"s are":" is"} missing a trading account or password. Add the missing details to download the master.`;
+  gaps.forEach(g => {
+    const needAcct = !g.accts.length, needPw = !g.pws.length;
+    const missing = [needAcct && "Trading account", needPw && "Password"].filter(Boolean).join(" & ");
+    const card = el("div","failfile");
+    card.innerHTML = `
+      <div class="ftop"><span class="lk">⚠</span><span>${esc(g.name)}</span></div>
+      <div class="pw-used" style="margin-bottom:8px">Missing: <b>${esc(missing)}</b></div>
+      <div class="retry-row">
+        ${needAcct ? `<input type="text" data-f="acct" placeholder="Trading account number…" autocomplete="off" />` : ""}
+        ${needPw ? `<input type="password" data-f="pw" placeholder="PDF password…" autocomplete="new-password" />` : ""}
+        <button class="rb">Save</button>
+      </div>
+      <div class="fmsg"></div>`;
+    const acctIn = card.querySelector('[data-f="acct"]'), pwIn = card.querySelector('[data-f="pw"]');
+    const msg = card.querySelector(".fmsg");
+    const save = () => {
+      const a = acctIn ? acctIn.value.trim() : "", p = pwIn ? pwIn.value.trim() : "";
+      if ((acctIn && !a) || (pwIn && !p)){
+        msg.className = "fmsg bad"; msg.textContent = `Enter the ${missing.toLowerCase()} to continue.`; return;
+      }
+      if (a) state.master.push({ name: g.name, acct: a });
+      if (p) state.passwordBook.push({ name: g.name, pw: p });
+      saveMaster(); savePwBook(); renderClients(); recomputeAccounts();
+      card.classList.add("solved");
+      card.querySelector(".ftop").innerHTML = `<span>✅</span><span>${esc(g.name)} — completed</span>`;
+      card.querySelector(".retry-row").style.display = "none";
+      card.querySelector(".pw-used").style.display = "none";
+      msg.className = "fmsg good"; msg.textContent = "Saved to the client master.";
+      refreshGapFoot();
+      const next = box.querySelector(".failfile:not(.solved) input"); if (next) next.focus();
+    };
+    card.querySelector(".rb").onclick = save;
+    card.querySelectorAll("input").forEach(i => i.addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      const ins = [...card.querySelectorAll("input")], k = ins.indexOf(i);
+      if (k < ins.length-1 && !ins[k+1].value) ins[k+1].focus(); else save();
+    }));
+    box.append(card);
+  });
+  refreshGapFoot();
+  gapOverlay.classList.add("on");
+  setTimeout(()=> box.querySelector("input")?.focus(), 260);
+}
 $("#clearClients").onclick = () => {
   if (!state.master.length && !state.passwordBook.length){ toast("Client master is already empty."); return; }
   if (!confirm("Clear the saved client master (accounts and passwords)?")) return;
