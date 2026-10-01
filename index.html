@@ -771,7 +771,9 @@ async function openPdf(bytes, passwords){
   const candidates = [""].concat(passwords.filter(Boolean));
   for (const pw of candidates){
     try{
-      const doc = await pdfjsLib.getDocument({ data: bytes.slice(0), password: pw }).promise;
+      // verbosity 0 = errors only: hides pdf.js info warnings such as "Setting up fake
+      // worker." (shown when the browser blocks background workers; PDFs still open).
+      const doc = await pdfjsLib.getDocument({ data: bytes.slice(0), password: pw, verbosity: 0 }).promise;
       return { doc, password: pw };
     } catch(e){
       if (e && (e.name === "PasswordException" || /password/i.test(e.message||""))) continue;
