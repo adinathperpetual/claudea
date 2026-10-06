@@ -402,6 +402,22 @@
     color:var(--muted);font-weight:600;cursor:default}
   .usertable tbody tr:last-child td,.logtable tbody tr:last-child td{border-bottom:none}
   .log-ok{color:var(--green);font-weight:600} .log-bad{color:var(--red);font-weight:600}
+  /* ---- Finesse sync panel ---- */
+  .fs-panel{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;background:var(--surface)}
+  .fs-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .fs-head b{font-family:"Space Grotesk","Inter",sans-serif;font-size:14px}
+  .fs-dot{width:9px;height:9px;border-radius:50%;background:var(--muted-2);display:inline-block}
+  .fs-dot.ok{background:var(--green)} .fs-dot.bad{background:var(--red)} .fs-dot.busy{background:var(--amber)}
+  .fs-status{font-size:12.5px;color:var(--muted)}
+  .fs-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--line)}
+  .fs-pill.active{background:var(--green-soft);color:var(--green);border-color:var(--green-line)}
+  .fs-pill.missing_from_finesse{background:var(--amber-soft);color:var(--amber);border-color:var(--amber-line)}
+  .fs-pill.not_in_finesse{background:var(--red-soft);color:var(--red);border-color:var(--red-line)}
+  .fs-pill.success{background:var(--green-soft);color:var(--green);border-color:var(--green-line)}
+  .fs-pill.partial,.fs-pill.running{background:var(--amber-soft);color:var(--amber);border-color:var(--amber-line)}
+  .fs-pill.failed{background:var(--red-soft);color:var(--red);border-color:var(--red-line)}
+  .fs-scroll{max-height:420px;overflow:auto}
+  .fs-sub{font-family:"Space Grotesk","Inter",sans-serif;font-size:13px;margin:16px 0 0;color:var(--ink-3)}
 
   @media(max-width:640px){
     .topbar{position:relative}
@@ -483,13 +499,58 @@
   <div class="grid" style="margin-top:20px;grid-template-columns:1fr" id="dataCardsGrid">
     <section class="card">
       <div class="card-head" id="cmHead" style="cursor:pointer" title="Click to show / hide the client master">
-        <h2><span class="num-chip">2</span> Client master (name · trading account · password)</h2>
+        <h2><span class="num-chip">2</span> Client master (Finesse sync · exceptional passwords)</h2>
         <span style="display:flex;align-items:center;gap:10px">
           <span class="ct" id="cmCount">0 clients</span>
           <span class="chev" id="cmChev" style="transition:transform .15s">›</span>
         </span>
       </div>
       <div class="card-body" id="cmBody" style="display:none">
+        <div class="fs-panel" id="fsPanel">
+          <div class="fs-head">
+            <b>Finesse sync</b><span class="fs-dot" id="fsDot"></span><span class="fs-status" id="fsStatus">Not connected</span>
+          </div>
+          <div id="fsConn">
+            <div class="u-add">
+              <input type="text" id="fsUrl" placeholder="Service URL (default http://127.0.0.1:8765)" autocomplete="off" />
+              <input type="password" id="fsExtToken" placeholder="Extractor token (saved on this device)" autocomplete="off" />
+              <input type="password" id="fsAdmToken" placeholder="Admin token (this session only)" autocomplete="off" />
+              <button class="btn dark" id="fsConnect">Connect</button>
+            </div>
+            <div class="hint">Connects to the Client Master Sync service (see README). The <b>extractor token</b> lets every user of this browser look up PDF passwords; the <b>admin token</b> opens the exceptional-password list below and is forgotten when you log out.</div>
+          </div>
+          <div id="fsMain" style="display:none">
+            <div class="pw-import">
+              <button class="btn dark" id="fsSync">⟳ Sync from Finesse</button>
+              <button class="btn" id="fsImport">Import exceptional passwords (.xlsx / .csv)</button>
+              <button class="btn" id="fsLogsBtn">Sync log</button>
+              <button class="btn" id="fsSettings">Connection…</button>
+              <input type="file" id="fsImportInput" accept=".xlsx,.xls,.csv,.txt" hidden />
+            </div>
+            <div class="hint" id="fsSummary"></div>
+            <div class="fs-sub">Exceptional-password clients <span class="ct" id="fsCount"></span></div>
+            <div class="hint" style="margin-top:6px">Default rule: the contract-note password is the client's <b>PAN in uppercase</b>. Only clients whose password is different are listed here. When a PDF is opened, its client's trading code is checked against this list first; if it isn't listed, the PAN from Finesse is used.</div>
+            <div class="u-add" style="margin-top:12px">
+              <input type="text" id="fsNewCode" placeholder="Trading code…" autocomplete="off" autocapitalize="characters" />
+              <input type="password" id="fsNewPw" placeholder="Contract-note password…" autocomplete="new-password" />
+              <input type="text" id="fsNewNote" placeholder="Note (optional)" autocomplete="off" />
+              <button class="btn green" id="fsAdd">Add exceptional</button>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="reveal-btn" id="fsReveal">👁 Reveal passwords</button></div>
+            <div class="fs-scroll">
+              <table class="usertable"><thead><tr><th>Client</th><th>Trading code</th><th>PAN</th><th>Password</th><th>Finesse</th><th style="text-align:right">Actions</th></tr></thead>
+                <tbody id="fsRows"></tbody></table>
+            </div>
+            <div id="fsLogs" style="display:none">
+              <div class="fs-sub">Sync log</div>
+              <div class="fs-scroll">
+                <table class="logtable"><thead><tr><th>Started</th><th>Trigger</th><th>Result</th><th>Fetched</th><th>Added</th><th>Updated</th><th>Missing</th><th>Errors</th></tr></thead>
+                  <tbody id="fsLogRows"></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fs-sub" style="margin:0 0 10px">Offline fallback — local client master (this browser only)</div>
         <div class="pw-import">
           <button class="btn" id="importClients">Import .xlsx / .csv / .txt</button>
           <button class="btn green" id="dlClients">Download updated master</button>
@@ -628,7 +689,7 @@
   </div>
 
   <div class="footer-note">
-    <b>100% on-device.</b> Your PDFs, passwords and extracted data never leave this browser tab.<br>
+    <b>On-device extraction.</b> Your PDFs and extracted data never leave this browser tab. When the Client Master service is connected, only a PDF's file name is sent to it (on your own machine/network) to look up the password.<br>
     Extraction is heuristic across broker formats — always spot-check WAP and quantity against the original note.
   </div>
 </div>
@@ -2112,7 +2173,9 @@ async function processOne(p){
   let opened;
   // Client master: passwords for the client name at the end of this file's name are
   // tried first (all of them), then any passwords entered manually this session.
-  const tryList = [...passwordsForFile(p.name), ...state.passwords];
+  // Client Master service (Finesse) first: exceptional password(s) for the client,
+  // else the default rule (PAN). Falls back silently if the service is unreachable.
+  const tryList = [...await serverPasswords(p.name), ...passwordsForFile(p.name), ...state.passwords];
   try { opened = await openPdf(p.bytes, tryList); }
   catch(e){ return { ...base, status:"warn", note:"Could not read PDF" }; }
   if (!opened) return { ...base, status:"lock" };
@@ -2900,7 +2963,7 @@ if (resetTplBtn) resetTplBtn.onclick = async () => {
 function recomputeAccounts(){
   state.results.forEach(r => {
     if (!r.client){ r.acct = ""; r.acctStatus = "noclient"; return; }
-    const m = matchClient(r.client, state.master);
+    const m = matchClient(r.client, masterForMatching());
     r.acctStatus = m.status;
     r.acct = m.status === "matched" ? m.match.acct : "";   // only from the uploaded master file
     r.candidates = m.candidates || [];
@@ -3240,6 +3303,231 @@ loadPdfs().then(renderPdfChips);
 loadTemplate().then(() => { applyTemplateUI(); refreshExportButtons(); });
 renderResults();
 
+/* ================= Client Master Sync service (Finesse) =================
+   A small local Python service (finesse_sync, see README) logs in to Finesse,
+   keeps the client list (name · PAN · trading code) in an encrypted database and
+   stores the "exceptional" passwords — clients whose contract-note password is NOT
+   their PAN in uppercase. This tool asks it for each PDF's password candidates.
+   If the service is down, everything falls back to the local master below and
+   manual entry: extraction never fails because of a sync problem. */
+const FS_LS_KEY = "cne_finesse_service_v1", FS_ADMIN_KEY = "cne_finesse_admin_v1";
+const fs = { url:"", ext:"", adm:"", up:false, admin:false, dir:[], reveal:false, logsOpen:false, poll:null };
+(function fsLoad(){
+  let c = {}; try{ c = JSON.parse(localStorage.getItem(FS_LS_KEY) || "{}") || {}; }catch(e){}
+  fs.url = c.url || ""; fs.ext = c.ext || "";
+  try{ fs.adm = sessionStorage.getItem(FS_ADMIN_KEY) || ""; }catch(e){}
+})();
+function fsBase(){
+  if (fs.url) return fs.url.replace(/\/+$/,"");
+  return /^https?:/.test(location.protocol) && location.port === "8765" ? location.origin : "http://127.0.0.1:8765";
+}
+async function fsFetch(path, { admin=false, method="GET", body=null, form=null, timeout=8000 } = {}){
+  const tok = admin ? fs.adm : (fs.ext || fs.adm);
+  if (!tok) throw new Error("No access token set.");
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+  try{
+    const headers = { Authorization: "Bearer " + tok };
+    if (body) headers["Content-Type"] = "application/json";
+    const r = await fetch(fsBase() + path, { method, headers, signal: ctl.signal,
+      body: form || (body ? JSON.stringify(body) : undefined) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+    return data;
+  } catch(e){
+    if (e.name === "AbortError") throw new Error("Client Master service did not respond.");
+    if (e instanceof TypeError) throw new Error("Client Master service is not reachable at " + fsBase() + ".");
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+/* --- used by the extractor (never throws) --- */
+async function serverPasswords(fileName){
+  if (!fs.up) return [];
+  try{
+    const r = await fsFetch("/api/passwords/resolve", { method:"POST", body:{ file_name: fileName }, timeout:5000 });
+    return Array.isArray(r.passwords) ? r.passwords : [];
+  } catch(e){ return []; }
+}
+// Local master + Finesse directory (name -> trading code) for the Trading Account column.
+function masterForMatching(){
+  if (!fs.dir.length) return state.master;
+  const seen = new Set(state.master.map(m => m.name.toUpperCase() + "|" + m.acct));
+  return state.master.concat(fs.dir.filter(d => !seen.has(d.name.toUpperCase() + "|" + d.acct)));
+}
+
+function fsSetStatus(cls, text){
+  const d = $("#fsDot"); if (d) d.className = "fs-dot " + (cls||"");
+  const s = $("#fsStatus"); if (s) s.textContent = text;
+}
+function fsForgetAdmin(){
+  fs.adm = ""; fs.admin = false; fs.reveal = false;
+  try{ sessionStorage.removeItem(FS_ADMIN_KEY); }catch(e){}
+  if (fs.poll){ clearInterval(fs.poll); fs.poll = null; }
+}
+
+async function fsInit(){
+  $("#fsUrl").value = fs.url; $("#fsExtToken").value = fs.ext ? "••••••••" : ""; $("#fsAdmToken").value = "";
+  if (!fs.ext && !fs.adm){ fs.up = false; fsSetStatus("", "Not connected — using the local master only"); fsShowMain(false); return; }
+  try{
+    await fsFetch("/api/whoami");
+    fs.up = true;
+    const d = await fsFetch("/api/directory");
+    fs.dir = (d.clients||[]).map(c => ({ name:c.name, acct:c.trading_code }));
+    recomputeAccounts();
+  } catch(e){
+    fs.up = false; fs.dir = [];
+    fsSetStatus("bad", e.message + " Using the local master (last saved data)."); fsShowMain(false); return;
+  }
+  fs.admin = false;
+  if (fs.adm && isAdmin()){
+    try{ fs.admin = (await fsFetch("/api/whoami", { admin:true })).role === "admin"; } catch(e){}
+    if (!fs.admin) fsForgetAdmin();
+  }
+  fsShowMain(fs.admin);
+  if (fs.admin) await fsRefresh();
+  else fsSetStatus("ok", `Connected · ${fs.dir.length} clients from Finesse` + (isAdmin() ? " · enter the admin token to manage exceptional passwords" : ""));
+}
+function fsShowMain(on){
+  $("#fsMain").style.display = on ? "" : "none";
+  $("#fsConn").style.display = on ? "none" : "";
+}
+
+async function fsRefresh(){
+  if (!fs.admin) return;
+  try{
+    const [st, ex] = await Promise.all([
+      fsFetch("/api/sync/status", { admin:true }),
+      fsFetch("/api/exceptional" + (fs.reveal ? "?reveal=true" : ""), { admin:true }),
+    ]);
+    fsRenderStatus(st); fsRenderRows(ex.items || []);
+    if (fs.logsOpen) fsRenderLogs((await fsFetch("/api/sync/logs", { admin:true })).logs || []);
+    if (st.running) fsStartPoll();
+  } catch(e){ fsSetStatus("bad", e.message); }
+}
+const fsWhen = iso => iso ? new Date(iso).toLocaleString() : "never";
+function fsRenderStatus(st){
+  const c = st.counts || {}, last = st.last_run;
+  if (st.running) fsSetStatus("busy", "Syncing from Finesse…");
+  else if (last && last.status === "failed") fsSetStatus("bad", `Last sync failed (${fsWhen(last.ended_at)}) — using data from ${fsWhen(st.last_success_at)}`);
+  else fsSetStatus("ok", `Connected · last synced ${fsWhen(st.last_success_at)}`);
+  $("#fsSync").disabled = !!st.running;
+  $("#fsSync").textContent = st.running ? "Syncing…" : "⟳ Sync from Finesse";
+  const parts = [`<b>${c.clients_active||0}</b> active clients in Finesse`];
+  if (c.clients_missing) parts.push(`<b>${c.clients_missing}</b> no longer in Finesse (flagged, kept)`);
+  if (c.invalid_pan) parts.push(`<b>${c.invalid_pan}</b> with an invalid PAN`);
+  if (st.next_scheduled_run) parts.push(`next scheduled sync ${fsWhen(st.next_scheduled_run)}`);
+  let html = parts.join(" · ");
+  if (last) html += `<br>Last run: <span class="fs-pill ${esc(last.status)}">${esc(last.status)}</span> ${esc(last.message||"")}`;
+  $("#fsSummary").innerHTML = html;
+}
+const FS_STATUS_TXT = { active:"in Finesse", missing_from_finesse:"left Finesse", not_in_finesse:"unknown code" };
+function fsRenderRows(items){
+  const codes = new Set(items.map(i => i.trading_code));
+  $("#fsCount").textContent = `(${codes.size})`;
+  $("#cmCount").textContent = `${codes.size} exceptional`;
+  const tb = $("#fsRows"); tb.innerHTML = "";
+  if (!items.length){
+    const tr = el("tr"); const td = el("td", null, "No exceptional clients — every PDF uses the PAN rule."); td.colSpan = 6; tr.append(td); tb.append(tr); return;
+  }
+  items.forEach(it => {
+    const tr = el("tr");
+    tr.append(el("td", null, it.client_name || "—"), el("td", "mono", it.trading_code), el("td", "mono", it.pan_masked || "—"),
+              el("td", "mono", it.password));
+    const st = el("td"); st.innerHTML = `<span class="fs-pill ${esc(it.status)}" title="${esc(it.missing_since ? "Missing since " + fsWhen(it.missing_since) : "")}">${esc(FS_STATUS_TXT[it.status]||it.status)}</span>`;
+    if (it.note) st.title = it.note;
+    const act = el("td"); act.style.textAlign = "right"; act.style.whiteSpace = "nowrap";
+    const ed = el("button", "btn mini", "Change"); ed.onclick = () => fsEdit(it);
+    const del = el("button", "btn mini", "✕"); del.title = "Remove"; del.style.marginLeft = "6px"; del.onclick = () => fsDelete(it);
+    act.append(ed, del); tr.append(st, act); tb.append(tr);
+  });
+}
+function fsRenderLogs(logs){
+  const tb = $("#fsLogRows"); tb.innerHTML = "";
+  logs.forEach(l => {
+    const tr = el("tr");
+    tr.append(el("td", null, fsWhen(l.started_at)), el("td", null, l.trigger));
+    const r = el("td"); r.innerHTML = `<span class="fs-pill ${esc(l.status)}">${esc(l.status)}</span>` + (l.method ? ` <span class="ct">${esc(l.method)}</span>` : ""); tr.append(r);
+    [l.fetched, l.added, l.updated, l.flagged_missing].forEach(n => tr.append(el("td", "mono", String(n||0))));
+    const e = el("td"); e.textContent = l.error_count ? `${l.error_count}` : "0";
+    if (l.error_count){ e.style.cursor = "pointer"; e.style.color = "var(--red)"; e.title = (l.errors||[]).slice(0,20).join("\n");
+      e.onclick = () => alert((l.message ? l.message + "\n\n" : "") + (l.errors||[]).join("\n")); }
+    tr.append(e); tb.append(tr);
+  });
+}
+function fsStartPoll(){
+  if (fs.poll) return;
+  fs.poll = setInterval(async () => {
+    try{
+      const st = await fsFetch("/api/sync/status", { admin:true });
+      if (!st.running){
+        clearInterval(fs.poll); fs.poll = null;
+        const last = st.last_run || {};
+        toast(last.status === "failed" ? "Sync failed: " + (last.message||"see sync log") : "Sync done — " + (last.message||""));
+        await fsInit();
+      } else fsRenderStatus(st);
+    } catch(e){ clearInterval(fs.poll); fs.poll = null; fsSetStatus("bad", e.message); }
+  }, 2000);
+}
+async function fsEdit(it){
+  const pw = prompt(`New contract-note password for ${it.client_name || it.trading_code} (${it.trading_code}):`);
+  if (pw == null || !pw.trim()) return;
+  try{ await fsFetch(`/api/exceptional/${it.id}`, { admin:true, method:"PUT", body:{ password: pw.trim() } }); toast("Password updated."); fsRefresh(); }
+  catch(e){ toast(e.message); }
+}
+async function fsDelete(it){
+  if (!confirm(`Remove the exceptional password for ${it.client_name || it.trading_code}? Their PDFs will use the PAN rule.`)) return;
+  try{ await fsFetch(`/api/exceptional/${it.id}`, { admin:true, method:"DELETE" }); toast("Removed."); fsRefresh(); }
+  catch(e){ toast(e.message); }
+}
+
+/* wiring */
+$("#fsConnect").onclick = async () => {
+  const url = $("#fsUrl").value.trim(), ext = $("#fsExtToken").value.trim(), adm = $("#fsAdmToken").value.trim();
+  fs.url = url;
+  if (ext && ext !== "••••••••") fs.ext = ext;
+  lsSet(FS_LS_KEY, { url: fs.url, ext: fs.ext });
+  if (adm){ fs.adm = adm; try{ sessionStorage.setItem(FS_ADMIN_KEY, adm); }catch(e){} }
+  fsSetStatus("busy", "Connecting…");
+  await fsInit();
+  if (adm && !fs.admin && fs.up) toast("That admin token was not accepted.");
+};
+$("#fsSettings").onclick = () => fsShowMain(false);
+$("#fsSync").onclick = async () => {
+  try{ await fsFetch("/api/sync", { admin:true, method:"POST" }); fsSetStatus("busy", "Syncing from Finesse…");
+       $("#fsSync").disabled = true; $("#fsSync").textContent = "Syncing…"; fsStartPoll(); }
+  catch(e){ toast(e.message); }
+};
+$("#fsAdd").onclick = async () => {
+  const code = $("#fsNewCode").value.trim(), pw = $("#fsNewPw").value.trim(), note = $("#fsNewNote").value.trim();
+  if (!code || !pw){ toast("Enter the trading code and the password."); return; }
+  try{
+    const r = await fsFetch("/api/exceptional", { admin:true, method:"POST",
+      body:{ trading_code: code, password: pw, note, user: authCurrent ? authCurrent.username : "" } });
+    $("#fsNewCode").value = ""; $("#fsNewPw").value = ""; $("#fsNewNote").value = "";
+    toast(r.known_client ? "Exceptional password added." : "Added — note: that trading code is not in Finesse (yet).");
+    fsRefresh();
+  } catch(e){ toast(e.message); }
+};
+$("#fsReveal").onclick = () => { fs.reveal = !fs.reveal; $("#fsReveal").textContent = fs.reveal ? "🙈 Hide passwords" : "👁 Reveal passwords"; fsRefresh(); };
+$("#fsLogsBtn").onclick = async () => {
+  fs.logsOpen = !fs.logsOpen; $("#fsLogs").style.display = fs.logsOpen ? "" : "none";
+  if (fs.logsOpen){ try{ fsRenderLogs((await fsFetch("/api/sync/logs", { admin:true })).logs || []); } catch(e){ toast(e.message); } }
+};
+$("#fsImport").onclick = () => $("#fsImportInput").click();
+$("#fsImportInput").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const form = new FormData(); form.append("file", f);
+  try{
+    const user = encodeURIComponent(authCurrent ? authCurrent.username : "");
+    const r = await fsFetch("/api/exceptional/import?user=" + user, { admin:true, method:"POST", form, timeout:60000 });
+    toast(`Imported ${r.added} exceptional password(s) · ${r.skipped_default} skipped (= PAN rule) · ${r.skipped_duplicate} already listed`);
+    if (r.errors && r.errors.length) alert(r.errors.slice(0,50).join("\n"));
+    fsRefresh();
+  } catch(err){ toast(err.message); }
+};
+["fsNewCode","fsNewPw","fsNewNote"].forEach(id => $("#"+id).addEventListener("keydown", e => { if (e.key === "Enter") $("#fsAdd").click(); }));
+["fsUrl","fsExtToken","fsAdmToken"].forEach(id => $("#"+id).addEventListener("keydown", e => { if (e.key === "Enter") $("#fsConnect").click(); }));
+
 /* ================= Auth, users & sign-in log ================= */
 const AUTH_USERS_KEY="cne_users_v1", AUTH_SESS_KEY="cne_session_v1", AUTH_LOG_KEY="cne_login_log_v1";
 let authUsers=[], authLog=[], authCurrent=null, pendingUser=null;
@@ -3323,6 +3611,7 @@ function enterApp(u, remember){
   applyRole(); renderUsers(); renderLoginLog();
 }
 function logout(){
+  fsForgetAdmin();
   try{ sessionStorage.removeItem(AUTH_SESS_KEY); }catch(e){}
   localStorage.removeItem(AUTH_SESS_KEY);
   authCurrent=null; pendingUser=null; resetGateUI();
@@ -3333,6 +3622,7 @@ function applyRole(){
   const g=$("#dataCardsGrid"); if (g) g.style.display = admin ? "" : "none";
   const a=$("#adminGrid"); if (a) a.style.display = "none";   // hidden until the header "Users" button is clicked
   const ul=$("#usersLink"); if (ul) ul.style.display = admin ? "" : "none";
+  fsInit();
 }
 /* users */
 function renderUsers(){
