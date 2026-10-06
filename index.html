@@ -271,6 +271,7 @@
   .conf-computed{background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue-line)}
   .conf-stated{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)}
   .conf-gross{background:var(--red-soft);color:var(--red);border:1px solid var(--red-line)}
+  .conf-ocr{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)}
   .acct{display:inline-flex;align-items:center;gap:4px;font-family:"IBM Plex Mono";font-size:10.5px;margin-top:5px;
     padding:2px 8px;border-radius:6px;font-weight:500}
   .acct.ok{color:var(--green);background:var(--green-soft)}
@@ -412,6 +413,7 @@
     .setrow{flex-direction:column;align-items:stretch;gap:6px}
     .cmrow{grid-template-columns:20px 1.3fr 1fr 1fr 24px;gap:6px}
   }
+
 </style>
 </head>
 <body>
@@ -480,11 +482,14 @@
 
   <div class="grid" style="margin-top:20px;grid-template-columns:1fr" id="dataCardsGrid">
     <section class="card">
-      <div class="card-head">
+      <div class="card-head" id="cmHead" style="cursor:pointer" title="Click to show / hide the client master">
         <h2><span class="num-chip">2</span> Client master (name · trading account · password)</h2>
-        <span class="ct" id="cmCount">0 clients</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="ct" id="cmCount">0 clients</span>
+          <span class="chev" id="cmChev" style="transition:transform .15s">›</span>
+        </span>
       </div>
-      <div class="card-body">
+      <div class="card-body" id="cmBody" style="display:none">
         <div class="pw-import">
           <button class="btn" id="importClients">Import .xlsx / .csv / .txt</button>
           <button class="btn green" id="dlClients">Download updated master</button>
@@ -506,13 +511,17 @@
 
   <div class="grid" style="margin-top:20px;grid-template-columns:1fr">
     <section class="card">
-      <div class="card-head">
+      <div class="card-head" id="tplHead" style="cursor:pointer" title="Click to show / hide template settings">
         <h2><span class="num-chip">3</span> Output template</h2>
-        <span class="ct" id="tplState">not loaded</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="ct" id="tplState">default</span>
+          <span class="chev" id="tplChev" style="transition:transform .15s">›</span>
+        </span>
       </div>
-      <div class="card-body">
+      <div class="card-body" id="tplBody" style="display:none">
         <div class="pw-import">
-          <button class="btn" id="importTpl">Upload Template.xlsx</button>
+          <button class="btn" id="importTpl">Upload new template (.xlsx)</button>
+          <button class="btn" id="resetTpl" style="display:none">Reset to default</button>
           <input type="file" id="tplInput" accept=".xlsx" hidden />
         </div>
         <div class="tplfile" id="tplName"></div>
@@ -535,7 +544,7 @@
     </section>
   </div>
 
-  <div class="grid" style="margin-top:20px;grid-template-columns:1fr" id="adminGrid">
+  <div class="grid" style="margin-top:20px;grid-template-columns:1fr;display:none" id="adminGrid">
     <section class="card">
       <div class="card-head">
         <h2><span class="num-chip">★</span> Users &amp; sign-in log</h2>
@@ -817,11 +826,14 @@ const num = s => {
 const ISIN_RE = /\b(IN[EFDN][0-9A-Z]{9})\b/;
 
 function pageLines(tc){
-  const items = tc.items.filter(it => it.str && it.str.trim() !== "").map(it => {
-    const h = Math.abs(it.height) || Math.abs(it.transform[3]) || 8;
-    return { str: it.str.replace(/−/g,"-").replace(/\s+/g," ").trim(), x: it.transform[4], y: it.transform[5],
-             w: it.width || it.str.length * h * 0.5, h };
-  });
+  const items = tc.items
+    .map(it => ({ ...it, str: String(it.str||"").replace(/[|¦]/g," ").replace(/−/g,"-").replace(/\s+/g," ").trim() }))
+    .filter(it => it.str !== "")
+    .map(it => {
+      const h = Math.abs(it.height) || Math.abs(it.transform[3]) || 8;
+      return { str: it.str, x: it.transform[4], y: it.transform[5],
+               w: it.width || it.str.length * h * 0.5, h };
+    });
   if (!items.length) return [];
   const med = items.map(i=>i.h).sort((a,b)=>a-b)[Math.floor(items.length/2)] || 8;
   const tol = Math.max(2.5, med * 0.55);
@@ -1033,6 +1045,60 @@ function cleanScrip(s){
        qty × net = total value.
    Two independent equations make a false positive vanishingly unlikely, and a
    row is only accepted when it is ambiguity-free. ---- */
+/* Set true while parsing an OCR'd (image) note so extraction uses the OCR-robust
+   qty×rate=total matcher instead of the exact gross±brokerage arithmetic. */
+let OCR_MODE = false;
+
+/* OCR-robust per-ISIN extractor. For each line carrying an ISIN, find the first
+   (qty, rate, value) triple on that row where |qty|×rate ≈ |value| — that is the
+   active side's quantity, WAP-after-brokerage and total. Tolerant of OCR dropping
+   the blank brokerage column and of wrapped security names. */
+function extractIsinProduct(lines){
+  const out = [];
+  const numVals = parts => (parts||[])
+    .filter(p => NUMTOK.test(p.str))
+    .map(p => num(p.str)).filter(v => !isNaN(v));
+  for (let i=0;i<lines.length;i++){
+    const m = lines[i].text.match(ISIN_RE);
+    if (!m) continue;
+    const isin = m[1].toUpperCase();
+    const nums = numVals(lines[i].parts);
+    if (nums.length < 2) continue;
+    // name: alphabetic tokens on this line (minus the ISIN), plus a wrapped
+    // fragment on the line just above if it is a short, number-free name piece.
+    const alpha = s => /[A-Za-z]{2,}/.test(s) && !/^(buy|sell|b|s|nse|bse|cm|eq|resident|rolling|ncl)$/i.test(s);
+    let nameToks = lines[i].parts.map(p=>p.str).filter(s => alpha(s) && !ISIN_RE.test(s) && !NUMTOK.test(s));
+    const prev = lines[i-1];
+    if (prev && !ISIN_RE.test(prev.text) && !/\d/.test(prev.text)){
+      const pw = prev.parts.map(p=>p.str).filter(alpha);
+      if (pw.length && pw.length <= 4) nameToks = pw.concat(nameToks);
+    }
+    const name = cleanScrip(nameToks.join(" "));
+    // find the active (qty, rate, total) triple
+    let found = null;
+    for (let a=0; a<nums.length && !found; a++){
+      const q = nums[a];
+      if (!Number.isInteger(q) || Math.abs(q) < 1 || Math.abs(q) > 5e6) continue;
+      for (let b=a+1; b<nums.length && !found; b++){
+        const r = nums[b];
+        if (!(r > 1)) continue;
+        for (let c=b+1; c<nums.length; c++){
+          const v = Math.abs(nums[c]);
+          if (v < 1) continue;
+          if (Math.abs(Math.abs(q)*r - v) <= Math.max(0.75, Math.abs(q)*r*3e-4)){
+            found = { q, r, v: nums[c] }; break;
+          }
+        }
+      }
+    }
+    if (!found) continue;
+    out.push({ scrip: name, isin, side: found.q < 0 ? "Sell" : "Buy",
+               qty: Math.abs(found.q), wap: found.r, gross: found.r, fills: 1,
+               conf: "ocr", basis: "OCR — qty×rate verified", ocr: true });
+  }
+  return out;
+}
+
 function extractByArithmetic(lines){
   // Many notes (Religare, Kotak, Axis) contain BOTH an ISIN/scrip summary that
   // rolls every trade up per security AND a detailed per-trade annexure below.
@@ -1073,7 +1139,10 @@ function extractByArithmetic(lines){
 
   let trades = [];
   for (const { region, date } of scopedList){
-    const t = extractArithmeticFrom(region);
+    // OCR'd image notes often drop blank columns (e.g. a 0.00 brokerage), which
+    // breaks the "gross ± brokerage = net" test. For those, fall back to the
+    // relationship that survives OCR: quantity × rate = total value.
+    const t = OCR_MODE ? extractIsinProduct(region) : extractArithmeticFrom(region);
     if (t) for (const x of t){ if (date) x.tradeDate = date; trades.push(x); }
   }
 
@@ -1871,7 +1940,7 @@ function findClientName(lines){
   //    (S.NO / PLOT / FLAT / ROAD / NAGAR ... or a pincode), sitting above the
   //    PAN/UCC labels. Runs last so it only fires when the labelled/addressee
   //    strategies above found nothing.
-  const ADDR_LINE = /(\bs\.?\s*no\b|\bplot\b|\bflat\b|\bh\.?\s*no\b|\bhouse\b|\broad\b|\bnagar\b|\bsector\b|\bstreet\b|\bcolony\b|\bmarg\b|\bwing\b|\bfloor\b|\bblock\b|\d{3})/i;
+  const ADDR_LINE = /(\bs\.?\s*no\b|\bno\.?\s*\d|\bplot\b|\bflat\b|\bh\.?\s*no\b|\bhouse\b|\bbldg\b|\bbuilding\b|\broad\b|\bnagar\b|\bsector\b|\bstreet\b|\bcolony\b|\bmarg\b|\bwing\b|\bfloor\b|\bblock\b|\bopp\b|\bnear\b|\bclass\b|\d{3})/i;
   for (let i=0;i<Math.min(lines.length,45);i++){
     // Read the LEFT cell only: on some notes (IIFL) the name shares its row with
     // the settlement column ("NARENDRA PRAKASH DHOKA  Settlement Date 21/08/2026").
@@ -1879,9 +1948,10 @@ function findClientName(lines){
     if (!wholeLineName(first)) continue;
     let nextAddr = false;
     for (let j=i+1;j<Math.min(i+3,lines.length);j++){
-      const u = (lines[j].cells && lines[j].cells[0] ? lines[j].cells[0].text : lines[j].text).trim();
-      if (!u) continue;
-      nextAddr = ADDR_LINE.test(u); break;
+      const uCell = (lines[j].cells && lines[j].cells[0] ? lines[j].cells[0].text : "").trim();
+      const uFull = (lines[j].text||"").trim();
+      if (!uFull) continue;
+      nextAddr = ADDR_LINE.test(uCell) || ADDR_LINE.test(uFull); break;
     }
     if (!nextAddr) continue;
     // confirm this is the client block: a PAN / UCC label appears just below
@@ -1948,13 +2018,93 @@ function updateProgress(done, total, label){
   $("#progBar").style.width = (total ? (done/total*100) : 0) + "%";
 }
 
-async function readAllLines(doc){
+// Read the real text layer (no OCR). Returns the lines and the total non-space
+// character count, so we can tell an image note (almost no text — maybe just a
+// digital-signature line) from a genuine text note / statement (lots of text).
+async function readTextLines(doc){
+  const out = []; let chars = 0;
+  for (let p=1; p<=doc.numPages; p++){
+    const tc = await (await doc.getPage(p)).getTextContent();
+    chars += (tc.items||[]).reduce((n,i)=> n + String(i.str||"").replace(/\s/g,"").length, 0);
+    out.push(...pageLines(tc));
+  }
+  return { lines: out, chars };
+}
+// OCR every page (used only as a fallback for image/scanned notes).
+async function ocrAllLines(doc){
   const out = [];
   for (let p=1; p<=doc.numPages; p++){
-    const page = await doc.getPage(p);
-    out.push(...pageLines(await page.getTextContent()));
+    const items = await ocrPageToItems(await doc.getPage(p), p, doc.numPages);
+    if (items.length) out.push(...pageLines({ items }));
   }
   return out;
+}
+
+/* ================= OCR fallback (scanned / image PDFs) =================
+   Image-only contract notes have no text layer, so nothing can be read from them.
+   We render each such page and run Tesseract.js (fetched on demand from a CDN) to
+   recover words + positions, then feed them to the same parser. OCR rows are
+   flagged for verification. This needs internet the first time and is slower. */
+let _tessWorker = null, _tessLoading = null;
+async function loadTesseract(){
+  if (_tessWorker) return _tessWorker;
+  if (!_tessLoading){
+    _tessLoading = (async () => {
+      if (!window.Tesseract){
+        await new Promise((res, rej) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";
+          s.onload = res; s.onerror = () => rej(new Error("ocr-load"));
+          document.head.appendChild(s);
+        });
+      }
+      return await window.Tesseract.createWorker("eng");
+    })();
+  }
+  try { _tessWorker = await _tessLoading; return _tessWorker; }
+  catch(e){ _tessLoading = null; return null; }
+}
+function rotateCanvas(src, deg){
+  if (!deg) return src;
+  const c = document.createElement("canvas");
+  if (deg % 180 === 0){ c.width = src.width; c.height = src.height; }
+  else { c.width = src.height; c.height = src.width; }
+  const g = c.getContext("2d");
+  g.translate(c.width/2, c.height/2); g.rotate(deg*Math.PI/180);
+  g.drawImage(src, -src.width/2, -src.height/2);
+  return c;
+}
+async function ocrPageToItems(page, pageNo, totalPages){
+  const T = await loadTesseract();
+  if (!T){ toast("OCR engine unavailable — it needs internet to load."); return []; }
+  try{
+    const base0 = page.getViewport({ scale: 1 });
+    const scale = Math.min(3, 2400 / Math.max(base0.width, base0.height));
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    // content may be sideways — pick the rotation giving the most confident words
+    let best = { words: [], H: canvas.height, score: -1 };
+    for (const deg of [0, 90, 270, 180]){
+      toast(`Reading image (OCR) — page ${pageNo}/${totalPages}${deg?` · orient ${deg}°`:""}…`);
+      const c = rotateCanvas(canvas, deg);
+      const { data } = await T.recognize(c);
+      const words = (data && data.words) || [];
+      const score = words.filter(w => (w.confidence||0) > 50 && /[A-Za-z0-9]/.test(w.text||"")).length;
+      if (score > best.score) best = { words, H: c.height, score };
+      if (deg === 0 && best.score > 60) break;
+    }
+    const toPt = 1 / scale, H = best.H;
+    return (best.words || [])
+      .filter(w => w.text && w.text.trim() && (w.confidence||0) > 30)
+      .map(w => {
+        const b = w.bbox || { x0:0, y0:0, x1:0, y1:0 };
+        const hpx = Math.max(6, b.y1 - b.y0);
+        return { str: w.text.trim(), width: (b.x1 - b.x0) * toPt, height: hpx * toPt,
+                 transform: [1, 0, 0, hpx*toPt, b.x0*toPt, (H - b.y1)*toPt] };
+      });
+  } catch(e){ toast("OCR failed on a page."); return []; }
 }
 
 async function processOne(p){
@@ -1972,19 +2122,37 @@ async function processOne(p){
 async function extractFrom(p, opened){
   const base = { id:p.id, file:p.name, password:opened.password, broker:"", client:"", tradeDate:"", trades:[], status:"lock", lines:[], diag:null };
   try{
-    const lines = await readAllLines(opened.doc);
+    // 1) try the real text layer
+    const txt = await readTextLines(opened.doc);
+    let lines = txt.lines, usedOcr = false;
+    OCR_MODE = false;
+    let { trades, reason, diag } = extractTrades(lines);
+
+    // 2) image/scanned note? It has little or no real text (maybe just a digital-
+    //    signature line) and found no trades — OCR every page and retry.
+    if (!trades.length && txt.chars < 600){
+      const ocrLines = await ocrAllLines(opened.doc);
+      if (ocrLines.length){
+        OCR_MODE = true;
+        const r2 = extractTrades(ocrLines);
+        OCR_MODE = false;
+        lines = ocrLines; usedOcr = true;
+        trades = r2.trades; reason = r2.reason; diag = r2.diag;
+      }
+    }
+
     const fullText = lines.map(l=>l.text).join("\n");
-    const { trades, reason, diag } = extractTrades(lines);
-    const note = trades.length ? "" :
-      reason === "no-table" ? (lines.length ? "No trade table found" : "No text layer (scanned image?)")
+    const note = trades.length ? (usedOcr ? "Read by OCR — please verify the figures" : "") :
+      usedOcr ? "Scanned image — OCR found no clear table"
+      : reason === "no-table" ? (lines.length ? "No trade table found" : "No text layer (scanned image?)")
       : reason === "no-columns" ? "Table found, columns unclear"
       : "Table found, no rows matched";
     return { ...base,
       broker: detectBroker(fullText), client: findClientName(lines), tradeDate: findTradeDate(lines),
-      trades, diag, note, status: trades.length ? "ok" : "warn",
+      trades, diag, note, ocr: usedOcr, status: trades.length ? "ok" : "warn",
       lines: lines.slice(0, 500).map(l => l.text),
     };
-  } catch(e){ return { ...base, status:"warn", note:"Parse error: " + (e.message||e) }; }
+  } catch(e){ OCR_MODE = false; return { ...base, status:"warn", note:"Parse error: " + (e.message||e) }; }
 }
 
 /* ================= Results ================= */
@@ -2031,7 +2199,7 @@ function renderResults(){
     <td>${r.scrip?`<span class="scrip">${esc(r.scrip)}</span>${r.isin?`<span class="isin">${esc(r.isin)}</span>`:""}`:NF}</td>
     <td>${r.side?`<span class="side ${r.side==="Buy"?"buy":"sell"}">${r.side==="Buy"?"▲ Buy":"▼ Sell"}</span>`:`<span class="side na">—</span>`}</td>
     <td class="n">${r.qty!=null&&!isNaN(r.qty)?fmtNum(r.qty):NF}${r.fills>1?`<span class="basis">${r.fills} fills</span>`:""}</td>
-    <td class="n">${r.wap!=null&&!isNaN(r.wap)?fmtMoney(r.wap):NF}${r.basis?`<span class="basis">${esc(r.basis)}</span>`:""}${r.conf?`<span class="conf-badge conf-${esc(r.conf==='manual'?'verified':r.conf)}">${esc({verified:'PROVEN',computed:'COMPUTED',stated:'AS LABELLED',gross:'UNVERIFIED',manual:'CONFIRMED'}[r.conf]||r.conf)}</span>`:""}</td>
+    <td class="n">${r.wap!=null&&!isNaN(r.wap)?fmtMoney(r.wap):NF}${r.basis?`<span class="basis">${esc(r.basis)}</span>`:""}${r.conf?`<span class="conf-badge conf-${esc(r.conf==='manual'?'verified':r.conf)}">${esc({verified:'PROVEN',computed:'COMPUTED',stated:'AS LABELLED',gross:'UNVERIFIED',manual:'CONFIRMED',ocr:'OCR · VERIFY'}[r.conf]||r.conf)}</span>`:""}</td>
     <td>${r.tradeDate?esc(r.tradeDate):NF}</td></tr>`).join("");
 
   body.querySelectorAll("[data-inspect]").forEach(b =>
@@ -2285,7 +2453,13 @@ function toISODate(s){
                                              file name ends in "_<client name>"
    Importing a new file REPLACES the saved master (it is the single source of truth). */
 const clientInput = $("#clientInput");
-$("#importClients").onclick = () => clientInput.click();
+const cmHead = $("#cmHead");
+if (cmHead) cmHead.onclick = () => {
+  const body = $("#cmBody"); const open = body.style.display !== "none";
+  body.style.display = open ? "none" : "";
+  const ch = $("#cmChev"); if (ch) ch.style.transform = open ? "" : "rotate(90deg)";
+};
+$("#importClients").onclick = (e) => { e.stopPropagation(); clientInput.click(); };
 clientInput.onchange = e => { if (e.target.files[0]) importClients(e.target.files[0]); clientInput.value=""; };
 
 const ACCT_HDR = /(trading\s*a\/?c|trading\s*account|trading\s*\/?\s*back\s*office\s*code|back\s*office\s*code|backoffice\s*code|trading\s*code|account\s*(no|number|code)|ucc|client\s*code|dp\s*code)/i;
@@ -2389,14 +2563,34 @@ function nameFromFile(fileName){
   return base.trim();
 }
 
-// every password in the master whose name matches this file's trailing name.
+// Every password in the master whose client matches this file's trailing name.
+// Uses the SAME flexible name matching as the trading account (tolerates missing
+// middle names and reversed name order), so "..._SOHAIL PATEL.pdf" still finds
+// "SOHAIL FAKHRUDDIN PATEL", and "..._MAHAVIR OSWAL HUF.pdf" finds
+// "Mahavir Jalamchand Oswal HUF".
 function passwordsForFile(fileName){
   if (!state.passwordBook.length) return [];
-  const target = pwbNorm(nameFromFile(fileName));
+  const rawTarget = nameFromFile(fileName);
+  const target = pwbNorm(rawTarget);
   if (!target) return [];
+  const names = [...new Set(state.passwordBook.map(e => e.name))];
+  // 1) exact (normalised) name match
+  let matched = names.filter(n => pwbNorm(n) === target);
+  // 2) fuzzy fallback — best match(es) by the shared name scorer
+  if (!matched.length){
+    const scored = names.map(n => ({ n, s: scoreNames(rawTarget, n) })).sort((a,b) => b.s - a.s);
+    const top = scored[0];
+    if (top && top.s >= AUTO_MATCH){
+      matched = scored.filter(x => x.s >= AUTO_MATCH && top.s - x.s <= 3).map(x => x.n);
+    } else if (top && top.s >= SUGGEST_MATCH && (!scored[1] || top.s - scored[1].s >= 8)){
+      matched = [top.n];   // a single clearly-best near-match
+    }
+  }
+  if (!matched.length) return [];
+  const mset = new Set(matched.map(pwbNorm));
   const out = [];
   for (const e of state.passwordBook){
-    if (pwbNorm(e.name) === target && e.pw && !out.includes(e.pw)) out.push(e.pw);
+    if (mset.has(pwbNorm(e.name)) && e.pw && !out.includes(e.pw)) out.push(e.pw);
   }
   return out;
 }
@@ -2613,6 +2807,16 @@ async function clearSavedPdfs(){ try{ const db=await idbOpen(); const tx=db.tran
 
 /* ---- Output template: bytes in IndexedDB, name + settings in localStorage ---- */
 const TPL_LS_KEY = "cne_template_meta_v1";
+/* ---- Built-in default template (Template Finesse) — embedded so it is present on
+   every device with no upload. A user-uploaded template (saved in IndexedDB)
+   overrides it; "Reset to default" restores this one. ---- */
+const DEFAULT_TEMPLATE_NAME = "Template Finesse.xlsx";
+const DEFAULT_TEMPLATE_B64 = "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";
+function defaultTemplateBytes(){
+  try { const bin = atob(DEFAULT_TEMPLATE_B64); const u = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; } catch(e){ return null; }
+}
+let templateIsDefault = false;
 function saveTemplateMeta(){
   try { localStorage.setItem(TPL_LS_KEY, JSON.stringify({ name: state.templateName, settings: state.settings })); } catch(e){}
 }
@@ -2639,26 +2843,49 @@ async function loadTemplate(){
     db.close();
     if (val) state.template = val instanceof Uint8Array ? val : new Uint8Array(val);
   } catch(e){}
+  // nothing uploaded/saved on this device -> use the built-in default template
+  if (!state.template){
+    const def = defaultTemplateBytes();
+    if (def){ state.template = def; state.templateName = DEFAULT_TEMPLATE_NAME; templateIsDefault = true; }
+  }
 }
 function applyTemplateUI(){
-  if (state.template){ $("#tplState").textContent = "loaded"; $("#tplName").textContent = "📗 " + (state.templateName || "Template.xlsx"); }
+  if (state.template){
+    $("#tplState").textContent = "📗 " + (state.templateName || "Template.xlsx") + (templateIsDefault ? " · default" : "");
+    $("#tplName").textContent = "📗 " + (state.templateName || "Template.xlsx") + (templateIsDefault ? "  ·  built-in default (used on every device)" : "  ·  custom (saved on this device)");
+    const rb = $("#resetTpl"); if (rb) rb.style.display = templateIsDefault ? "none" : "";
+  }
   const map = { setTradeType:"tradeType", setCategory:"category", setPrice:"price", setKeep:"keep" };
   for (const [id,key] of Object.entries(map)){ const elx = $("#"+id); if (elx && state.settings[key]!=null) elx.value = state.settings[key]; }
 }
 
 /* ================= Template ================= */
+const tplHead = $("#tplHead");
+if (tplHead) tplHead.onclick = () => {
+  const body = $("#tplBody"); const open = body.style.display !== "none";
+  body.style.display = open ? "none" : "";
+  const ch = $("#tplChev"); if (ch) ch.style.transform = open ? "" : "rotate(90deg)";
+};
 const tplInput = $("#tplInput");
-$("#importTpl").onclick = () => tplInput.click();
+$("#importTpl").onclick = (e) => { e.stopPropagation(); tplInput.click(); };
 tplInput.onchange = async e => {
   const f = e.target.files[0]; tplInput.value = "";
   if (!f) return;
   state.template = new Uint8Array(await f.arrayBuffer());
   state.templateName = f.name;
-  $("#tplState").textContent = "loaded";
-  $("#tplName").textContent = "📗 " + f.name;
+  templateIsDefault = false;
+  applyTemplateUI();
   refreshExportButtons();
-  saveTemplate();
-  toast("Template loaded.");
+  saveTemplate();          // persists this custom template, overriding the default on this device
+  toast("New template saved on this device.");
+};
+const resetTplBtn = $("#resetTpl");
+if (resetTplBtn) resetTplBtn.onclick = async () => {
+  const def = defaultTemplateBytes(); if (!def){ toast("No default template."); return; }
+  state.template = def; state.templateName = DEFAULT_TEMPLATE_NAME; templateIsDefault = true;
+  try { const db = await idbOpen(); const tx = db.transaction(IDB_TPL,"readwrite"); tx.objectStore(IDB_TPL).delete("current"); db.close(); } catch(e){}
+  saveTemplateMeta(); applyTemplateUI(); refreshExportButtons();
+  toast("Reset to built-in default template.");
 };
 ["setTradeType","setCategory","setPrice","setKeep"].forEach(id => {
   $("#"+id).onchange = e => {
@@ -3104,7 +3331,7 @@ function logout(){
 function applyRole(){
   const admin=isAdmin();
   const g=$("#dataCardsGrid"); if (g) g.style.display = admin ? "" : "none";
-  const a=$("#adminGrid"); if (a) a.style.display = admin ? "" : "none";
+  const a=$("#adminGrid"); if (a) a.style.display = "none";   // hidden until the header "Users" button is clicked
   const ul=$("#usersLink"); if (ul) ul.style.display = admin ? "" : "none";
 }
 /* users */
@@ -3175,7 +3402,16 @@ function renderLoginLog(){
 $("#authGo").onclick=authAttempt;
 ["authUser","authPass","authPass2"].forEach(id=>{ const e=$("#"+id); if(e) e.addEventListener("keydown",ev=>{ if(ev.key==="Enter") authAttempt(); }); });
 $("#logoutBtn").onclick=logout;
-$("#usersLink").onclick=()=>{ const a=$("#adminGrid"); if(a){ a.scrollIntoView({behavior:"smooth",block:"start"}); } $("#tabUsers").click(); };
+$("#usersLink").onclick=()=>{
+  const a=$("#adminGrid"); if(!a) return;
+  if (a.style.display !== "none"){          // currently shown -> hide
+    a.style.display="none";
+  } else {                                   // hidden -> show
+    a.style.display="grid";
+    const tu=$("#tabUsers"); if (tu) tu.click();
+    if (a.scrollIntoView) a.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+};
 $("#addUserBtn").onclick=addUserUI;
 $("#tabUsers").onclick=()=>{ $("#tabUsers").classList.add("on"); $("#tabLog").classList.remove("on"); $("#usersPane").style.display=""; $("#logPane").style.display="none"; };
 $("#tabLog").onclick=()=>{ $("#tabLog").classList.add("on"); $("#tabUsers").classList.remove("on"); $("#logPane").style.display=""; $("#usersPane").style.display="none"; renderLoginLog(); };
