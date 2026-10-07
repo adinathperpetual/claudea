@@ -312,7 +312,7 @@ class FinesseClient:
             page += 1
         return from_dicts(out)
 
-    def _in_browser(self, work: Callable[["BrowserSession"], list[ClientRecord]]) -> list[ClientRecord]:
+    def _in_browser(self, work: Callable[["BrowserSession"], Any]) -> Any:
         if self.session is None:
             self.session = self.store.load()      # reuse saved cookies if still valid
         with BrowserSession(self.s, self.session) as b:

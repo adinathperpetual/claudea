@@ -85,6 +85,9 @@ class Settings:
     finesse_report_name: str = field(default_factory=lambda: _env("FINESSE_REPORT_NAME", "Client Master Report"))
     finesse_report_button: str = field(default_factory=lambda: _env("FINESSE_REPORT_BUTTON", "Generate"))
     finesse_report_timeout: int = field(default_factory=lambda: _int("FINESSE_REPORT_TIMEOUT_SECONDS", 300))
+    # Posting transactions: Equity Transaction Upload page and Equity Staging page
+    finesse_txn_upload_route: str = field(default_factory=lambda: _env("FINESSE_TXN_UPLOAD_ROUTE", "#/fileUpload/EQ-Transaction"))
+    finesse_staging_route: str = field(default_factory=lambda: _env("FINESSE_STAGING_ROUTE", "#/equity/staging"))
     # Trading account missing from the list/report -> read it from the client's profile page
     profile_lookup: bool = field(default_factory=lambda: _bool("FINESSE_PROFILE_LOOKUP", True))
     profile_lookup_limit: int = field(default_factory=lambda: _int("FINESSE_PROFILE_LOOKUP_LIMIT", 500))
