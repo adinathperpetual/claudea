@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import hmac
 import io
+import json
 import logging
 import threading
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import db, master, sync
@@ -114,9 +115,21 @@ async def no_cache(request, call_next):
 
 
 # ---------------------------------------------------------------- routes
+LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
 @app.get("/")
-def index():
-    return FileResponse(ROOT / "index.html")
+def index(request: Request):
+    """Serve the extractor. Opened on this PC itself, it is pre-connected with the
+    (lookup-only) extractor token, so users never have to paste it. The admin token
+    is still required for the Client Master screen."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    s = get_settings()
+    host = request.client.host if request.client else ""
+    if host in LOOPBACK and s.extractor_tokens:
+        boot = "<script>window.CNE_SERVICE_AUTO=" + json.dumps({"ext": s.extractor_tokens[0]}) + ";</script>"
+        html = html.replace("</head>", boot + "\n</head>", 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/health")

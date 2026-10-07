@@ -1,0 +1,22 @@
+CONTRACT NOTE EXTRACTOR - START HERE
+=====================================
+
+FIRST TIME (Admin, once):
+  1. Install Python 3.10+ from https://www.python.org/downloads/
+     (tick 'Add python.exe to PATH' on the first screen).
+  2. Keep this folder somewhere fixed, e.g. D:\ContractNoteExtractor
+  3. Double-click SETUP.bat and answer: Finesse User ID, Password, PAN.
+  4. Optional: double-click AUTOSTART_ON.bat (tool starts with Windows;
+     the 08:00 Finesse sync then always runs).
+
+EVERY DAY:
+  1. Double-click START.bat (skip if AUTOSTART is on). Keep the black window open.
+  2. Browser opens http://127.0.0.1:8765/ - sign in (first time: admin / admin,
+     then choose a new password).
+  3. Admin: card 2 > paste Admin token from data\ACCESS_TOKENS.txt > Connect.
+     Check 'last synced' is today; if not, click 'Sync from Finesse'.
+  4. Drop PDFs on card 1 (file name ends with _CLIENT NAME.pdf) > Extract.
+  5. Download filled template.
+
+Full SOP: see the SOP document shared with this tool (can be printed / saved as PDF).
+Never share .env, data\ACCESS_TOKENS.txt or the data folder.

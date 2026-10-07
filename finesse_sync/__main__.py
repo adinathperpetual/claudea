@@ -1,5 +1,6 @@
 """Command line:
 
+  python -m finesse_sync setup        first-time setup wizard (Finesse login, keys, tokens)
   python -m finesse_sync serve        start the API + scheduler (and serve the extractor UI)
   python -m finesse_sync sync         run one sync now (for cron / Task Scheduler)
   python -m finesse_sync test-login   log in to Finesse and report success / failure
@@ -31,9 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="finesse_sync", description="Client Master Sync (Finesse)")
     ap.add_argument("-v", "--verbose", action="store_true")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("setup")
     sp = sub.add_parser("serve")
     sp.add_argument("--host", default="127.0.0.1")
     sp.add_argument("--port", type=int, default=8765)
+    sp.add_argument("--open", action="store_true", help="open the tool in the default browser")
     sub.add_parser("sync")
     sub.add_parser("test-login")
     dp = sub.add_parser("discover")
@@ -47,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
         from .security import generate_key
         print(generate_key())
         return 0
+    if a.cmd == "setup":
+        from .wizard import run
+        return run()
     if a.cmd == "gentoken":
         print(secrets.token_urlsafe(32))
         return 0
@@ -63,7 +69,12 @@ def main(argv: list[str] | None = None) -> int:
             s = get_settings()
             if not s.admin_tokens:
                 print("WARNING: CNE_ADMIN_TOKENS is empty — nobody can open the Client Master.", file=sys.stderr)
-            uvicorn.run("finesse_sync.api:app", host=a.host, port=a.port, log_level="info")
+            if a.open:
+                import threading
+                import webbrowser
+                threading.Timer(2.0, lambda: webbrowser.open(f"http://127.0.0.1:{a.port}/")).start()
+            print(f"\nContract Note Extractor is running at http://127.0.0.1:{a.port}/ — keep this window open.\n")
+            uvicorn.run("finesse_sync.api:app", host=a.host, port=a.port, log_level="warning")
             return 0
 
         db.init_db()

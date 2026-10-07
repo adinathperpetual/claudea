@@ -3315,6 +3315,8 @@ const fs = { url:"", ext:"", adm:"", up:false, admin:false, dir:[], reveal:false
 (function fsLoad(){
   let c = {}; try{ c = JSON.parse(localStorage.getItem(FS_LS_KEY) || "{}") || {}; }catch(e){}
   fs.url = c.url || ""; fs.ext = c.ext || "";
+  // Opened from the service on this PC: it hands over the lookup-only token itself.
+  if (!fs.ext && window.CNE_SERVICE_AUTO && window.CNE_SERVICE_AUTO.ext) fs.ext = window.CNE_SERVICE_AUTO.ext;
   try{ fs.adm = sessionStorage.getItem(FS_ADMIN_KEY) || ""; }catch(e){}
 })();
 function fsBase(){

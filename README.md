@@ -35,7 +35,19 @@ It then tries passwords in this order:
 The Client Master screen shows **only exceptional clients**.
 If you try to add a password that equals the client's PAN, it is rejected because the default rule already covers it.
 
-## Setup (Windows or Linux, Python 3.11+)
+## Quick start (Windows, no command line)
+
+1. Install Python 3.10+ from python.org and tick **Add python.exe to PATH**.
+2. Double-click **SETUP.bat**. It installs everything, then asks for your Finesse user ID, password and PAN.
+   It also creates the keys and saves the tokens to `data/ACCESS_TOKENS.txt`.
+3. Double-click **START.bat**. The tool opens at http://127.0.0.1:8765/ and is already connected for password lookups.
+   An admin pastes the admin token in card 2 to manage the Client Master.
+4. Optional: run **AUTOSTART_ON.bat** so the tool starts with Windows and the 08:00 sync always runs.
+   Use **SYNC_NOW.bat** and **TEST_LOGIN.bat** for a manual sync and a login check.
+
+Mac/Linux: run `./setup.sh`, then `./start.sh`. The manual steps below do the same thing by hand.
+
+## Setup by hand (Windows or Linux, Python 3.10+)
 
 ```bash
 python -m venv .venv
