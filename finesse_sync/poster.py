@@ -135,11 +135,18 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS post_jobs (
     created_by TEXT, file_name TEXT, status TEXT NOT NULL, step TEXT, message TEXT, data TEXT)"""
 
 
+_ready = False
+
+
 def _init() -> None:
+    """Create the table; on the first call in this process, close jobs a restart interrupted."""
+    global _ready
     with db.connect() as c:
         c.execute(SCHEMA)
-        c.execute("UPDATE post_jobs SET status='failed', message='Interrupted (service restarted)' "
-                  "WHERE status IN ('uploading', 'posting')")
+        if not _ready:
+            c.execute("UPDATE post_jobs SET status='failed', message='Interrupted (service restarted)' "
+                      "WHERE status IN ('uploading', 'posting')")
+    _ready = True
 
 
 def _save(job_id: int, **kw) -> None:
@@ -320,10 +327,14 @@ def _upload_file(b: BrowserSession, data: bytes, file_name: str) -> str:
 
 def _staging_search(b: BrowserSession, account: str) -> None:
     box = None
-    for f in b._visible_inputs():
-        if re.search(r"trading\s*account", f["words"], re.I):
-            box = f["el"]
-            break
+    deadline = time.time() + 30                # the page draws itself a moment after it opens
+    while box is None and time.time() < deadline:
+        for f in b._visible_inputs():
+            if re.search(r"trading\s*account", f["words"], re.I):
+                box = f["el"]
+                break
+        if box is None:
+            b.page.wait_for_timeout(500)
     if box is None:
         raise b._report_error("'Trading Account Number' box not found on Equity Staging.")
     box.fill("")
@@ -439,7 +450,9 @@ def _phase_upload(job_id: int, data: bytes, file_name: str, rows: list[TxnRow]) 
                 n_all = sum(1 for x in all_rows if _matches(x, t))
                 n_mapped = sum(1 for x in mapped if _matches(x, t))
                 if n_before:
+                    # an identical row was already waiting: can't tell old from new -> never auto-post it
                     dup.append(t.label())
+                    continue
                 if n_all - n_before <= 0:
                     missing.append(t.label())
                 elif n_mapped - n_before <= 0 and n_mapped < n_all:

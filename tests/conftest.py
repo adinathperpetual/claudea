@@ -22,8 +22,9 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SYNC_SCHEDULE_ENABLED", "false")
     monkeypatch.setenv("FINESSE_RETRIES", "2")
     monkeypatch.setenv("FINESSE_TIMEOUT_SECONDS", "15")
-    from finesse_sync import config, db
+    from finesse_sync import config, db, poster
     config.reset_settings()
+    poster._ready = False
     db.init_db()
     yield
     config.reset_settings()

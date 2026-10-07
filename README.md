@@ -154,6 +154,26 @@ Other commands: `python -m finesse_sync status`.
 To keep the service running, use Windows Task Scheduler (`serve` at startup) or a systemd unit.
 If you would rather schedule `python -m finesse_sync sync` yourself, set `SYNC_SCHEDULE_ENABLED=false`.
 
+## Upload to Finesse (with confirmation)
+
+After extraction, click **Upload to Finesse** (next to *Download filled template*). An admin must be connected in card 2.
+1. The tool builds the same file as *Download filled template*. Rows without a trading account are left out.
+2. It sends the file to the service, which logs in to Finesse.
+3. It uploads the file: **File Upload › Equity Uploads › Transactions Upload › Excel Upload › Upload**.
+4. It opens **Equity › Equity Staging**, searches each trading account in the file, and finds the rows this upload created.
+   It matches on trade date, purchase/sell, quantity and rate.
+5. A window lists, per account, the rows it will post. It also lists:
+   - unmapped rows (scrip or client not mapped in Finesse);
+   - rows that were already in staging before the upload (possible duplicate upload);
+   - rows not found after the upload.
+
+   None of these are posted.
+6. **Confirm & Post**: the tool ticks only the listed rows (checking the number ticked), clicks **Post**, confirms, and checks they left staging.
+   **Don't post** leaves the uploaded rows in Equity Staging.
+
+On any layout problem the job stops without posting. It saves `data/finesse_report_page.txt` and a screenshot.
+Page addresses are set in `.env`: `FINESSE_TXN_UPLOAD_ROUTE` and `FINESSE_STAGING_ROUTE`.
+
 ## Sync behaviour
 
 - **Upsert by trading code.** New clients are inserted. Name and PAN changes are updated.

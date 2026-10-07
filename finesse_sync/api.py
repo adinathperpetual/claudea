@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import db, master, sync
+from . import db, master, poster, sync
 from .config import ROOT, ConfigError, get_settings
 from .records import read_delimited
 from .security import Cipher
@@ -252,3 +252,48 @@ def _read_rows(data: bytes, name: str) -> list[list[str]]:
     except Exception as e:  # noqa: BLE001
         raise master.MasterError(f"Could not read the file: {e}") from e
     return df.fillna("").astype(str).values.tolist()
+
+
+# ---------------------------------------------------------------- upload + post transactions (with confirmation)
+@app.post("/api/finesse/transactions/upload", status_code=202)
+async def upload_transactions(file: UploadFile = File(...), user: str = "", _role: Role = Depends(admin_only)):
+    """Upload the filled template to Finesse and find the rows in Equity Staging.
+    Nothing is posted until /confirm is called."""
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 10 MB).")
+    try:
+        return {"job_id": poster.start(data, file.filename or "transactions.xlsx", user)}
+    except poster.PostError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/finesse/transactions/jobs")
+def transaction_jobs(limit: int = 20, _role: Role = Depends(admin_only)):
+    return {"jobs": poster.list_jobs(max(1, min(limit, 100)))}
+
+
+@app.get("/api/finesse/transactions/jobs/{job_id}")
+def transaction_job(job_id: int, _role: Role = Depends(admin_only)):
+    job = poster.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found.")
+    return job
+
+
+@app.post("/api/finesse/transactions/jobs/{job_id}/confirm", status_code=202)
+def confirm_transactions(job_id: int, _role: Role = Depends(admin_only)):
+    try:
+        poster.confirm(job_id)
+    except poster.PostError as e:
+        raise HTTPException(409, str(e)) from e
+    return {"ok": True}
+
+
+@app.post("/api/finesse/transactions/jobs/{job_id}/cancel")
+def cancel_transactions(job_id: int, _role: Role = Depends(admin_only)):
+    try:
+        poster.cancel(job_id)
+    except poster.PostError as e:
+        raise HTTPException(409, str(e)) from e
+    return {"ok": True}

@@ -176,6 +176,70 @@ def report_xlsx() -> bytes:
     return buf.getvalue()
 
 
+# Single-page app at /finesse/ with hash routes, like the real Finesse:
+#   #/fileUpload/EQ-Transaction  -> Equity Transaction Upload (Excel Upload / Broker Upload, Upload)
+#   #/equity/staging             -> Equity Staging (Trading Account Number search, tabs, tick boxes, Post)
+UNKNOWN_ISIN = "INE000X00000"      # an ISIN Finesse cannot map -> "Unmapped Scrips"
+
+SPA_APP = """<!doctype html><html><body><nav>Perpetual Capital Advisors
+<span id="rep" style="cursor:pointer">Reports</span><span id="repmenu"></span></nav><main id="v"></main>
+<script>document.getElementById('rep').onclick = () => { document.getElementById('repmenu').innerHTML =
+  "<a href='/finesse/corporate-reports'>Corporate Reports</a> <a href='#'>Client Reports</a>"; };</script>
+<div id="snack"></div><div id="dlg"></div>
+<script>
+const v = document.getElementById('v');
+const snack = m => { document.getElementById('snack').innerHTML = `<div class="mat-mdc-snack-bar-container">${m}</div>`;
+                     setTimeout(() => document.getElementById('snack').innerHTML = '', 6000); };
+let tab = 'All', acct = '';
+function upload(){
+  v.innerHTML = `<h2>Equity Transaction Upload</h2><p>Select a Registrar file you want to upload</p>
+    <label><input type="radio" name="k" value="excel"> Excel Upload</label>
+    <label><input type="radio" name="k" value="broker"> Broker Upload</label>
+    <button id="tpl">Download Template</button>
+    <div class="drop">Drag & drop any file here or browse file <input type="file" id="f" style="display:none"></div>
+    <button id="up"><span class="icon">upload</span> Upload</button>`;
+  document.getElementById('up').onclick = async () => {
+    const kind = (document.querySelector('input[name=k]:checked') || {}).value;
+    const f = document.getElementById('f').files[0];
+    if (kind !== 'excel' || !f) { snack('Error: select Excel Upload and a file'); return; }
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('api/eq-upload', {method: 'POST', body: fd}); const j = await r.json();
+    setTimeout(() => snack(j.message), 700);
+  };
+}
+async function staging(){
+  const q = new URLSearchParams({account: acct, tab}); const j = await (await fetch('api/staging?' + q)).json();
+  v.innerHTML = `<h2>Equity Staging</h2>
+    <mat-form-field><mat-label>Trading Account Number</mat-label><input id="acct" value="${acct}"></mat-form-field>
+    <button id="search">Search</button>
+    <div class="tabs">${['Unmapped Scrips', 'Unmapped Clients', 'Mapped', 'All'].map(t =>
+       `<span class="tab" data-t="${t}">${t}(${j.counts[t]})</span>`).join(' ')}</div>
+    <button id="post">Post</button> <button id="del">Delete</button>
+    <table><thead><tr><th><input type="checkbox" id="all"></th><th>Trading Account ID</th><th>Client Name</th><th>Client Code</th>
+      <th>Portfolio Name</th><th>Broker Scrip Name</th><th>Trade Date</th><th>Transaction Type</th><th>Quantity</th>
+      <th>Market Rate</th><th>Brokerage</th><th>Net Rate</th><th>Trade Amount</th></tr></thead>
+    <tbody>${j.rows.map(r => `<tr><td><input type="checkbox" data-id="${r.id}"></td><td>${r.account}</td><td>${r.client}</td>
+      <td>${r.code}</td><td>Primary</td><td>${r.scrip}</td><td>${r.date}</td><td>${r.type}</td><td>${r.qty}</td>
+      <td>${r.rate}</td><td>-</td><td>${r.rate}</td><td>${(r.qty * r.rate).toFixed(0)}</td></tr>`).join('')}</tbody></table>`;
+  document.getElementById('search').onclick = () => { acct = document.getElementById('acct').value.trim(); setTimeout(staging, 500); };
+  document.querySelectorAll('.tab').forEach(e => e.onclick = () => { tab = e.dataset.t; staging(); });
+  document.getElementById('post').onclick = () => {
+    const ids = [...document.querySelectorAll('tbody input:checked')].map(c => +c.dataset.id);
+    if (!ids.length) { snack('Select at least one transaction'); return; }
+    document.getElementById('dlg').innerHTML = `<mat-dialog-container role="dialog"><p>Post ${ids.length} transaction(s)?</p>
+      <button id="no">No</button><button id="yes">Yes</button></mat-dialog-container>`;
+    document.getElementById('no').onclick = () => document.getElementById('dlg').innerHTML = '';
+    document.getElementById('yes').onclick = async () => { document.getElementById('dlg').innerHTML = '';
+      await fetch('api/staging/post', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})});
+      snack('Transactions posted successfully'); setTimeout(staging, 300); };
+  };
+}
+function route(){ if (location.hash.startsWith('#/fileUpload/EQ-Transaction')) upload();
+                  else if (location.hash.startsWith('#/equity/staging')) staging(); else v.innerHTML = '<h1>Dashboard</h1>'; }
+window.onhashchange = route; setTimeout(route, 600);
+</script></body></html>"""
+
+
 def make_app(state: dict) -> FastAPI:
     app = FastAPI()
     sessions: set[str] = set()
@@ -321,6 +385,60 @@ def make_app(state: dict) -> FastAPI:
         sessions.clear()
         return {"ok": True}
 
+    # ---- the single-page app (upload + staging)
+    @app.get("/finesse/", response_class=HTMLResponse)
+    def spa(req: Request):
+        if not ok(req):
+            return RedirectResponse("/finesse")
+        return SPA_APP
+
+    @app.post("/finesse/api/eq-upload")
+    async def eq_upload(req: Request):
+        import io
+        from openpyxl import load_workbook
+        if not ok(req):
+            return JSONResponse({"message": "Session expired"}, status_code=401)
+        form = await req.form()
+        ws = load_workbook(io.BytesIO(await form["file"].read()), data_only=True).active
+        rows = list(ws.iter_rows(values_only=True))
+        head = [str(h or "").strip() for h in rows[0]]
+        col = {h: i for i, h in enumerate(head)}
+        n = 0
+        for r in rows[1:]:
+            if not r or not r[col["Trading Account"]]:
+                continue
+            d = r[col["Trade Date"]]
+            d = d.strftime("%d-%m-%Y") if hasattr(d, "strftime") else "-".join(reversed(str(d).split("-")))
+            isin = r[col["ISIN No"]] or ""
+            state["staging"].append({
+                "id": state["next_id"], "account": str(r[col["Trading Account"]]), "client": r[col["Client Name"]],
+                "code": "PCA00333", "scrip": "Unknown Scrip" if isin == UNKNOWN_ISIN else f"Scrip {isin}",
+                "date": d, "type": r[col["Transaction Type"]], "qty": r[col["Quantity"]],
+                "rate": r[col["Market Price Per Share"]], "mapped": isin != UNKNOWN_ISIN})
+            state["next_id"] += 1
+            n += 1
+        state["uploads"] = state.get("uploads", 0) + 1
+        return {"message": f"File uploaded successfully ({n} transactions)"}
+
+    @app.get("/finesse/api/staging")
+    def staging_rows(req: Request, account: str = "", tab: str = "All"):
+        rows = [r for r in state["staging"] if not account or r["account"] == account]
+        counts = {"Unmapped Scrips": sum(not r["mapped"] for r in rows), "Unmapped Clients": 0,
+                  "Mapped": sum(r["mapped"] for r in rows), "All": len(rows)}
+        shown = {"Mapped": [r for r in rows if r["mapped"]], "Unmapped Scrips": [r for r in rows if not r["mapped"]],
+                 "Unmapped Clients": []}.get(tab, rows)
+        return {"rows": shown, "counts": counts}
+
+    @app.post("/finesse/api/staging/post")
+    async def staging_post(req: Request):
+        ids = set((await req.json())["ids"])
+        state["posted"] += [r for r in state["staging"] if r["id"] in ids]
+        state["staging"] = [r for r in state["staging"] if r["id"] not in ids]
+        return {"ok": True}
+
+    state.setdefault("staging", [])
+    state.setdefault("posted", [])
+    state.setdefault("next_id", 1)
     return app
 
 

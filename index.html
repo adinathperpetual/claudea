@@ -653,6 +653,7 @@
     <h2>Extracted trades</h2>
     <div class="exports">
       <button class="btn dark" id="expTpl" disabled>Download filled template</button>
+      <button class="btn green" id="expFinesse" disabled title="Upload the filled template to Finesse and post it from Equity Staging after you confirm">Upload to Finesse</button>
       <button class="btn" id="expXlsx" disabled>Export Excel (.xlsx)</button>
       <button class="btn" id="expCsv" disabled>Export CSV</button>
       <button class="btn" id="clearResults" disabled title="Clear the extracted rows only — keeps your uploaded PDFs and passwords">Clear records</button>
@@ -763,6 +764,26 @@
     <div class="modal-foot">
       <span class="note">Unconfirmed rows stay out of the filled template.</span>
       <button class="btn" id="closePrice">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="fpOverlay">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="fpTitle">
+    <div class="modal-head">
+      <div class="modal-lock" style="background:var(--green-soft);border-color:var(--green-line)">⇪</div>
+      <div>
+        <h3 id="fpTitle">Upload to Finesse</h3>
+        <p>The file is uploaded (Equity Uploads › Transactions Upload) and the new rows are found in Equity Staging. Nothing is posted until you click <b>Confirm &amp; Post</b>.</p>
+      </div>
+    </div>
+    <div class="modal-body" id="fpBody"></div>
+    <div class="modal-foot">
+      <span class="note" id="fpNote"></span>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="fpCancel">Close</button>
+        <button class="btn green" id="fpConfirm" style="display:none">Confirm &amp; Post</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2299,6 +2320,7 @@ function refreshExportButtons(){
   const any = state.results.length > 0;
   $("#expXlsx").disabled = !has; $("#expCsv").disabled = !has;
   $("#expTpl").disabled = !(has && state.template);
+  $("#expFinesse").disabled = !(has && state.template);
   $("#clearResults").disabled = !any;
 }
 
@@ -3178,12 +3200,9 @@ function injectSafeStyles(sxml){
   } catch(e){ return null; }
 }
 
-$("#expTpl").onclick = () => {
-  const rows = templateRows();
-  if (!rows.length){ toast("Nothing to write yet."); return; }
-  if (!state.template){ toast("Upload your Template.xlsx first."); return; }
-  if (!(window.XLSX && XLSX.CFB)){ toast("Spreadsheet engine not loaded — refresh the page."); return; }
-  try{
+/* Write rows into the user's template and return the .xlsx bytes (throws on error). */
+function buildFilledTemplate(rows, keepExisting){
+  {
     // Patch the sheet XML inside the user's own file so its header colours,
     // comments, date format and validation rules all survive untouched.
     const cfb = XLSX.CFB.read(state.template, { type:"array" });
@@ -3219,7 +3238,7 @@ $("#expTpl").onclick = () => {
     }
 
     let kept = "", next = 2;
-    if (state.settings.keep === "keep"){
+    if (keepExisting){
       kept = header ? body.replace(header,"") : body;
       const nums = [...body.matchAll(/<row r="(\d+)"/g)].map(m => +m[1]);
       next = (nums.length ? Math.max(...nums) : 1) + 1;
@@ -3230,10 +3249,24 @@ $("#expTpl").onclick = () => {
     xml = xml.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:R${next+rows.length-1}"/>`);
 
     XLSX.CFB.utils.cfb_add(cfb, cfb.FullPaths[idx].replace(/^[^/]*\//,"/"), strToBytes(xml));
-    const out = XLSX.CFB.write(cfb, { fileType:"zip", type:"array", compression:true });
-    downloadBlob(new Blob([new Uint8Array(out)],
-      { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      (state.templateName||"Template").replace(/\.xlsx$/i,"") + "-filled.xlsx");
+    return new Uint8Array(XLSX.CFB.write(cfb, { fileType:"zip", type:"array", compression:true }));
+  }
+}
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const filledName = () => (state.templateName||"Template").replace(/\.xlsx$/i,"") + "-filled.xlsx";
+function templateReady(rows){
+  if (!rows.length){ toast("Nothing to write yet."); return false; }
+  if (!state.template){ toast("Upload your Template.xlsx first."); return false; }
+  if (!(window.XLSX && XLSX.CFB)){ toast("Spreadsheet engine not loaded — refresh the page."); return false; }
+  return true;
+}
+
+$("#expTpl").onclick = () => {
+  const rows = templateRows();
+  if (!templateReady(rows)) return;
+  try{
+    const out = buildFilledTemplate(rows, state.settings.keep === "keep");
+    downloadBlob(new Blob([out], { type: XLSX_MIME }), filledName());
     toast(`Wrote ${rows.length} row${rows.length>1?"s":""} into the template.`);
   } catch(err){
     console.error(err);
@@ -3342,7 +3375,8 @@ const fs = { url:"", ext:"", adm:"", up:false, admin:false, dir:[], reveal:false
 })();
 function fsBase(){
   if (fs.url) return fs.url.replace(/\/+$/,"");
-  return /^https?:/.test(location.protocol) && location.port === "8765" ? location.origin : "http://127.0.0.1:8765";
+  // served by the Client Master service itself -> talk to that server; opened as a file -> default port
+  return /^https?:/.test(location.protocol) ? location.origin : "http://127.0.0.1:8765";
 }
 async function fsFetch(path, { admin=false, method="GET", body=null, form=null, timeout=8000 } = {}){
   const tok = admin ? fs.adm : (fs.ext || fs.adm);
@@ -3551,6 +3585,97 @@ $("#fsImportInput").onchange = async e => {
 };
 ["fsNewCode","fsNewPw","fsNewNote"].forEach(id => $("#"+id).addEventListener("keydown", e => { if (e.key === "Enter") $("#fsAdd").click(); }));
 ["fsUrl","fsExtToken","fsAdmToken"].forEach(id => $("#"+id).addEventListener("keydown", e => { if (e.key === "Enter") $("#fsConnect").click(); }));
+
+/* ================= Upload to Finesse (with confirmation) =================
+   1) the filled template (same file as "Download filled template") is sent to the
+      Client Master service, which uploads it in Finesse and finds the new rows in
+      Equity Staging;  2) this window lists them;  3) only after "Confirm & Post"
+      are they ticked and posted. Unmapped rows and rows that were already in
+      staging are never posted — they are listed for you to check. */
+const fpOverlay = $("#fpOverlay");
+let fpJob = null, fpTimer = null, fpStatus = "";
+const FP_LABEL = { uploading:"Uploading to Finesse…", awaiting_confirmation:"Ready — check the rows and confirm",
+  posting:"Posting in Finesse…", posted:"Posted", partial:"Partly posted", failed:"Failed", cancelled:"Not posted" };
+function fpClose(){ fpOverlay.classList.remove("on"); clearInterval(fpTimer); fpTimer = null; }
+fpOverlay.addEventListener("click", e => { if (e.target === fpOverlay && !["uploading","posting"].includes(fpStatus)) fpClose(); });
+
+function fpList(title, items, cls){
+  if (!items || !items.length) return "";
+  return `<div style="margin-top:8px;font-size:12.5px;line-height:1.6;color:var(--muted)"><b class="${cls||""}">${esc(title)}</b><br>` +
+         items.map(t => "• " + esc(t)).join("<br>") + "</div>";
+}
+function fpRender(j){
+  fpStatus = j.status || "";
+  const d = j.data || {}, accts = d.accounts || {}, res = d.post_result || {};
+  let html = `<p class="diagline"><span class="fs-pill ${fpStatus === "posted" ? "success" : fpStatus === "failed" ? "failed" : "partial"}">` +
+             `${esc(FP_LABEL[fpStatus] || fpStatus)}</span> ${esc(j.step && ["uploading","posting"].includes(fpStatus) ? j.step : "")}</p>`;
+  if (j.message) html += `<p class="diagline">${esc(j.message)}</p>`;
+  for (const [acct, a] of Object.entries(accts)){
+    const rows = (a.to_post || []).map(r => `<tr><td class="mono">${esc(r.trade_date)}</td><td>${esc(r.side)}</td>` +
+      `<td class="mono" style="text-align:right">${esc(r.qty)}</td><td class="mono" style="text-align:right">${Number(r.rate).toFixed(2)}</td>` +
+      `<td class="mono">${esc(r.isin || "")}</td></tr>`).join("");
+    const done = res[acct];
+    html += `<div class="failfile"><div class="ftop"><span>🏦</span><span>${esc(acct)} — ${esc(a.client || "")}</span></div>` +
+      (rows ? `<table class="usertable" style="margin-top:6px"><thead><tr><th>Trade date</th><th>Type</th><th style="text-align:right">Qty</th>` +
+              `<th style="text-align:right">Rate</th><th>ISIN</th></tr></thead><tbody>${rows}</tbody></table>`
+            : `<div style="margin-top:6px;font-size:12.5px;color:var(--muted)">No rows to post for this account.</div>`) +
+      (done ? `<div class="fmsg ${done.still_in_staging ? "bad" : "good"}">Posted ${done.posted} · still in staging ${done.still_in_staging}` +
+              (done.message ? ` · Finesse: ${esc(done.message)}` : "") + `</div>` : "") +
+      fpList("Unmapped in Finesse — not posted (map the scrip/client in Finesse, then post there):", a.unmapped, "log-bad") +
+      fpList("Already in staging before this upload — not posted (possible duplicate upload, check in Finesse):", a.already_in_staging, "log-bad") +
+      fpList("Not found in staging after the upload — not posted:", a.not_found, "log-bad") + `</div>`;
+  }
+  $("#fpBody").innerHTML = html;
+  const waiting = fpStatus === "awaiting_confirmation", busy = ["uploading","posting"].includes(fpStatus);
+  $("#fpConfirm").style.display = waiting ? "" : "none";
+  $("#fpCancel").textContent = waiting ? "Don't post" : "Close";
+  $("#fpCancel").disabled = busy;
+  $("#fpNote").textContent = busy ? "Working in Finesse — keep this page open." :
+    waiting ? "Only the rows listed above are ticked and posted." : "";
+}
+function fpPoll(){
+  clearInterval(fpTimer);
+  fpTimer = setInterval(async () => {
+    try{
+      const j = await fsFetch(`/api/finesse/transactions/jobs/${fpJob}`, { admin:true });
+      fpRender(j);
+      if (!["uploading","posting"].includes(j.status)){ clearInterval(fpTimer); fpTimer = null; }
+    } catch(e){ /* service busy — keep polling */ }
+  }, 2000);
+}
+$("#expFinesse").onclick = async () => {
+  if (!fs.up){ toast("Connect the Client Master service first (card 2)."); return; }
+  if (!fs.admin){ toast("Enter the admin token in card 2 and click Connect to upload to Finesse."); return; }
+  const all = templateRows(), rows = all.filter(r => r.A);
+  if (!templateReady(rows)) return;
+  const left = all.length - rows.length;
+  let bytes;
+  try{ bytes = buildFilledTemplate(rows, false); }
+  catch(e){ toast("Could not write the template: " + (e.message || e)); return; }
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: XLSX_MIME }), filledName());
+  fpRender({ status:"uploading", step:"Sending the file…",
+             message: left ? `${left} row(s) without a trading account were left out.` : "" });
+  fpOverlay.classList.add("on");
+  try{
+    const user = encodeURIComponent(authCurrent ? authCurrent.username : "");
+    const r = await fsFetch(`/api/finesse/transactions/upload?user=${user}`, { admin:true, method:"POST", form, timeout:60000 });
+    fpJob = r.job_id; fpPoll();
+  } catch(e){ fpRender({ status:"failed", message: e.message }); }
+};
+$("#fpConfirm").onclick = async () => {
+  try{
+    await fsFetch(`/api/finesse/transactions/jobs/${fpJob}/confirm`, { admin:true, method:"POST" });
+    fpRender({ status:"posting", step:"Starting…" }); fpPoll();
+  } catch(e){ toast(e.message); }
+};
+$("#fpCancel").onclick = async () => {
+  if (fpStatus === "awaiting_confirmation"){
+    try{ await fsFetch(`/api/finesse/transactions/jobs/${fpJob}/cancel`, { admin:true, method:"POST" }); } catch(e){}
+    toast("Not posted. The uploaded rows are still in Equity Staging.");
+  }
+  fpClose();
+};
 
 /* ================= Auth, users & sign-in log ================= */
 const AUTH_USERS_KEY="cne_users_v1", AUTH_SESS_KEY="cne_session_v1", AUTH_LOG_KEY="cne_login_log_v1";
