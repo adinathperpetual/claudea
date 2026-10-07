@@ -68,14 +68,14 @@ def test_failed_fetch_keeps_last_data():
         raise FinesseError("Finesse down")
     r = run_sync("test", boom)
     assert r["status"] == "failed" and "Finesse down" in r["message"]
-    assert len(master.directory()) == 3
+    assert master.counts()["clients_active"] == 3
 
 
 def test_mass_disappearance_guard():
     run_sync("test", fetch(RECS))
     r = run_sync("test", fetch(RECS[:1]))       # 2 of 3 would vanish (> 30%)
     assert r["status"] == "failed" and "aborted" in r["message"]
-    assert len(master.directory()) == 3
+    assert master.counts()["clients_active"] == 3
 
 
 def test_exceptional_and_resolution():

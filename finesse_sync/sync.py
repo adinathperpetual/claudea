@@ -91,7 +91,7 @@ def _apply(records: list[ClientRecord], cipher: Cipher, stats: dict, errors: lis
             errors.append(f"{code} ({r.client_name}): invalid PAN {mask_pan(pan) or '(blank)'} — stored but flagged")
         if code in clean:
             errors.append(f"{code}: appears more than once in Finesse — last row kept")
-        clean[code] = ClientRecord(code, r.client_name.strip(), pan)
+        clean[code] = ClientRecord(code, r.client_name.strip(), pan, (r.trading_account or "").strip().upper())
 
     if len(clean) < max(1, s.min_records):
         raise FinesseError(f"Finesse returned only {len(clean)} usable clients (minimum {s.min_records}); "
@@ -111,12 +111,12 @@ def _apply(records: list[ClientRecord], cipher: Cipher, stats: dict, errors: lis
             valid = is_valid_pan(r.pan)
             old = existing.get(code)
             if old is None:
-                db.insert_client(c, code, r.client_name, cipher.encrypt(r.pan), valid, ts)
+                db.insert_client(c, code, r.client_name, cipher.encrypt(r.pan), valid, ts, r.trading_account)
                 stats["added"] += 1
                 continue
             old_pan = cipher.decrypt(old["pan_enc"]) if old["pan_enc"] else ""
-            if old["client_name"] != r.client_name or old_pan != r.pan:
-                db.update_client(c, code, r.client_name, cipher.encrypt(r.pan), valid, ts)
+            if old["client_name"] != r.client_name or old_pan != r.pan or (old["trading_account"] or "") != r.trading_account:
+                db.update_client(c, code, r.client_name, cipher.encrypt(r.pan), valid, ts, r.trading_account)
                 stats["updated"] += 1
                 if not old["active"]:
                     stats["reactivated"] += 1

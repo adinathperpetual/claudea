@@ -88,7 +88,8 @@ class Settings:
     # Column / JSON-key names for the three fields (blank = auto-detect by header text)
     field_name: str = field(default_factory=lambda: _env("FINESSE_FIELD_NAME"))
     field_pan: str = field(default_factory=lambda: _env("FINESSE_FIELD_PAN"))
-    field_code: str = field(default_factory=lambda: _env("FINESSE_FIELD_TRADING_CODE"))
+    field_code: str = field(default_factory=lambda: _env("FINESSE_FIELD_TRADING_CODE"))      # client code
+    field_account: str = field(default_factory=lambda: _env("FINESSE_FIELD_TRADING_ACCOUNT"))
 
     # --- Network behaviour ---
     http_timeout: int = field(default_factory=lambda: _int("FINESSE_TIMEOUT_SECONDS", 60))

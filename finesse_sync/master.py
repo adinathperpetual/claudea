@@ -15,7 +15,7 @@ import re
 
 from . import db
 from .names import best_matches, name_from_file
-from .records import CODE_HDR, NAME_HDR, _clean
+from .records import ACCT_HDR, CODE_HDR, NAME_HDR, _clean
 from .security import Cipher, default_password, is_valid_pan, mask_pan, mask_secret
 
 PW_HDR = re.compile(r"(password|pass\s*word|\bpwd\b|\bpass\b|passcode|\bpin\b)", re.I)
@@ -45,6 +45,7 @@ def list_exceptional(cipher: Cipher, reveal: bool = False) -> list[dict]:
         out.append({
             "id": r["id"],
             "trading_code": r["trading_code"],
+            "trading_account": (cl["trading_account"] if cl else "") or "",
             "client_name": (cl["client_name"] if cl else None) or r["client_name"] or "",
             "pan_masked": mask_pan(pan),
             "pan_valid": bool(cl["pan_valid"]) if cl else False,
@@ -59,12 +60,13 @@ def list_exceptional(cipher: Cipher, reveal: bool = False) -> list[dict]:
 
 
 def directory(include_inactive: bool = False) -> list[dict]:
-    """Name + trading code of every client (no PAN) — used by the extractor to fill
-    the Trading Account column."""
+    """Name + broker trading account of every client that has one (no PAN) — used by the
+    extractor to fill the Trading Account column."""
     with db.connect() as c:
-        q = "SELECT trading_code, client_name, active FROM clients" + ("" if include_inactive else " WHERE active=1")
-        return [{"trading_code": r["trading_code"], "name": r["client_name"], "active": bool(r["active"])}
-                for r in c.execute(q + " ORDER BY client_name")]
+        q = ("SELECT trading_code, client_name, trading_account, active FROM clients WHERE trading_account != ''"
+             + ("" if include_inactive else " AND active=1"))
+        return [{"trading_code": r["trading_code"], "trading_account": r["trading_account"], "name": r["client_name"],
+                 "active": bool(r["active"])} for r in c.execute(q + " ORDER BY client_name")]
 
 
 def counts() -> dict:
@@ -83,8 +85,9 @@ def add_exceptional(cipher: Cipher, trading_code: str, password: str, note: str 
     code = (trading_code or "").strip().upper()
     pw = (password or "").strip()
     if not code or not pw:
-        raise MasterError("Trading code and password are both required.")
+        raise MasterError("Client code / trading account and password are both required.")
     with db.connect() as c:
+        code = db.code_for(c, code) or code      # a trading account is stored under its client code
         cl = db.get_client(c, code)
         if cl and cl["pan_enc"] and pw == default_password(cipher.decrypt(cl["pan_enc"])):
             raise MasterError(f"{code}: that password is the client's PAN — the default rule already covers it, "
@@ -118,7 +121,7 @@ def import_exceptional(cipher: Cipher, rows: list[list[str]], user: str = "") ->
         raise MasterError("The file is empty.")
     head = rows[0]
     pw_cols = [i for i, h in enumerate(head) if PW_HDR.search(h)]
-    code_col = next((i for i, h in enumerate(head) if i not in pw_cols and CODE_HDR.search(h)), -1)
+    code_col = next((i for i, h in enumerate(head) if i not in pw_cols and (ACCT_HDR.search(h) or CODE_HDR.search(h))), -1)
     name_col = next((i for i, h in enumerate(head) if i not in pw_cols and i != code_col and NAME_HDR.search(h)), -1)
     if code_col < 0 or not pw_cols:
         raise MasterError("Need a header row with a Trading Account column and at least one Password column.")
@@ -129,7 +132,7 @@ def import_exceptional(cipher: Cipher, rows: list[list[str]], user: str = "") ->
         for i, r in enumerate(rows[1:], 2):
             get = lambda k: r[k] if 0 <= k < len(r) else ""  # noqa: E731
             name = get(name_col)
-            codes = [x.strip().upper() for x in re.split(r"[,;/]", get(code_col)) if x.strip()]
+            codes = [db.code_for(c, x) or x.strip().upper() for x in re.split(r"[,;]", get(code_col)) if x.strip()]
             if not codes and name.upper() in name_to_code:
                 codes = [name_to_code[name.upper()]]
             if not codes:
@@ -168,10 +171,11 @@ def resolve_passwords(cipher: Cipher, file_name: str = "", trading_code: str = "
         how = ""
         tc = (trading_code or "").strip().upper()
         if tc:
-            codes, how = [tc], "trading_code"
+            codes, how = [db.code_for(c, tc) or tc], "trading_code"
         if not codes and file_name:
             tokens = {t.upper() for t in re.split(r"[^A-Za-z0-9]+", re.sub(r"\.[A-Za-z0-9]+$", "", file_name)) if t}
-            hit = [code for code in clients if code in tokens]
+            hit = [code for code, cl in clients.items()
+                   if code in tokens or (cl["trading_account"] and cl["trading_account"].upper() in tokens)]
             if len(hit) == 1:
                 codes, how = hit, "code_in_file_name"
         if not codes:
@@ -197,7 +201,8 @@ def resolve_passwords(cipher: Cipher, file_name: str = "", trading_code: str = "
         matched = []
         for code in codes[:5]:
             cl = clients.get(code)
-            matched.append({"trading_code": code, "client_name": cl["client_name"] if cl else ""})
+            matched.append({"trading_code": code, "client_name": cl["client_name"] if cl else "",
+                            "trading_account": (cl["trading_account"] if cl else "") or ""})
             exc = [cipher.decrypt(r["password_enc"]) for r in db.exceptional_rows(c, code)]
             for pw in exc:
                 if pw and pw not in passwords:

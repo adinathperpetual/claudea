@@ -610,6 +610,8 @@ class BrowserSession:
 
     def _maximize_page_size(self) -> None:
         """Pick the largest 'rows per page' option if the grid has one."""
+        if self._maximize_material_page_size():
+            return
         try:
             selects = self.page.locator("select")
             for i in range(min(selects.count(), 10)):
@@ -630,17 +632,80 @@ class BrowserSession:
         except Exception:  # noqa: BLE001
             pass
 
+    def _maximize_material_page_size(self) -> bool:
+        """Angular Material paginator: open its page-size dropdown and pick the largest."""
+        try:
+            trig = self._first_visible([".mat-mdc-paginator-page-size-select", ".mat-paginator-page-size-select",
+                                        "mat-paginator mat-select"])
+            if trig is None:
+                return False
+            trig.click()
+            opts = self.page.locator("mat-option, .mat-mdc-option")
+            opts.first.wait_for(timeout=5000)
+            best, best_n = None, -1
+            for i in range(min(opts.count(), 20)):
+                t = (opts.nth(i).inner_text() or "").strip()
+                n = 10 ** 9 if t.lower() == "all" else int(t) if t.isdigit() else -1
+                if n > best_n:
+                    best, best_n = opts.nth(i), n
+            if best is None:
+                self.page.keyboard.press("Escape")
+                return False
+            if (trig.inner_text() or "").strip() == (best.inner_text() or "").strip():
+                self.page.keyboard.press("Escape")       # already showing the most rows
+                return True
+            before = self._row_count()
+            best.click()
+            # the grid redraws a moment later: wait for the row count to change (or give up)
+            deadline = time.time() + min(self.s.http_timeout, 15)
+            while time.time() < deadline and self._row_count() == before:
+                self.page.wait_for_timeout(250)
+            try:
+                self.page.wait_for_load_state("networkidle", timeout=self.s.http_timeout * 1000)
+            except Exception:  # noqa: BLE001
+                pass
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
     def _read_tables(self) -> list[dict]:
+        """Every table on the page as {head, rows}. Angular Material tables (Finesse) are
+        read by their stable column classes (cdk-column-clientName …), not header text.
+        A cell holding a link is read from the link only, so badges beside a name
+        ("Joint", "Proprietorship") are left out."""
         return self.page.evaluate("""(sel) => {
-          const tables = sel ? [...document.querySelectorAll(sel)] : [...document.querySelectorAll('table')];
+          const colOf = c => { const m = (c.className || '').match(/(?:^|\\s)cdk-column-([\\w-]+)/); return m ? m[1] : ''; };
+          const txt = c => { const a = c.querySelector('a'); return ((a ? a.innerText : c.innerText) || '').replace(/\\s+/g, ' ').trim(); };
+          const tables = sel ? [...document.querySelectorAll(sel)] : [...document.querySelectorAll('table, mat-table, [role=table]')];
           return tables.map(t => {
-            let head = [...t.querySelectorAll('thead th, thead td')].map(c => c.innerText.trim());
-            let rows = [...t.querySelectorAll('tbody tr')];
+            let rows = [...t.querySelectorAll('tbody tr, mat-row, [role=row]')].filter(r => !r.querySelector('th, mat-header-cell'));
             if (!rows.length) rows = [...t.querySelectorAll('tr')];
+            const first = rows[0] ? [...rows[0].children] : [];
+            if (first.length && first.every(c => colOf(c))) {
+              const head = first.map(colOf);
+              return { head, rows: rows.map(r => head.map(k => { const c = r.querySelector('.cdk-column-' + k); return c ? txt(c) : ''; }))
+                                        .filter(r => r.some(x => x)) };
+            }
+            let head = [...t.querySelectorAll('thead th, thead td')].map(c => c.innerText.trim());
             if (!head.length && rows.length){ head = [...rows[0].children].map(c => c.innerText.trim()); rows = rows.slice(1); }
-            return { head, rows: rows.map(r => [...r.children].map(c => c.innerText.trim())).filter(r => r.some(x => x)) };
+            return { head, rows: rows.map(r => [...r.children].map(txt)).filter(r => r.some(x => x)) };
           });
         }""", self.s.sel_table or "")
+
+    def _row_count(self) -> int:
+        try:
+            return max((len(t["rows"]) for t in self._read_tables()), default=0)
+        except Exception:  # noqa: BLE001
+            return 0
+
+    def _wait_for_rows(self) -> None:
+        """Single-page apps draw the table after the page has 'loaded' — wait for real rows."""
+        try:
+            self.page.wait_for_selector(self.s.sel_table + " tbody tr" if self.s.sel_table else
+                                        "tr.mat-mdc-row, tr.mat-row, mat-row, table tbody tr",
+                                        timeout=self.s.http_timeout * 1000)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _pick_table(self) -> tuple[list[str], list[list[str]]]:
         for t in sorted(self._read_tables(), key=lambda t: -len(t["rows"])):
@@ -655,6 +720,10 @@ class BrowserSession:
     def _next_button(self):
         if self.s.sel_next_page:
             return self._first_visible([self.s.sel_next_page])
+        mat = self._first_visible([".mat-mdc-paginator-navigation-next", ".mat-paginator-navigation-next",
+                                   "button[aria-label='Next page']"])
+        if mat is not None:
+            return mat
         cands = self.page.locator("button, a, li, span[role=button]")
         for i in range(min(cands.count(), 300)):
             el = cands.nth(i)
@@ -677,6 +746,7 @@ class BrowserSession:
 
     def read_client_list(self) -> list[ClientRecord]:
         self.open_client_list()
+        self._wait_for_rows()
         self._maximize_page_size()
         head, rows = self._pick_table()
         all_rows = list(rows)
@@ -686,14 +756,19 @@ class BrowserSession:
             if nxt is None or self._disabled(nxt):
                 break
             nxt.click()
-            try:
-                self.page.wait_for_load_state("networkidle", timeout=self.s.http_timeout * 1000)
-            except Exception:  # noqa: BLE001
-                pass
-            _, rows = self._pick_table()
+            # The grid may page in the browser (no network): wait until the first row changes.
+            deadline = time.time() + self.s.http_timeout
+            while True:
+                try:
+                    self.page.wait_for_load_state("networkidle", timeout=2000)
+                except Exception:  # noqa: BLE001
+                    pass
+                _, rows = self._pick_table()
+                if (rows and rows[:1] != prev) or time.time() > deadline:
+                    break
+                self.page.wait_for_timeout(300)
             if not rows or rows[:1] == prev:
                 break
             prev = rows[:1]
             all_rows.extend(rows)
         return from_dicts([dict(zip(head, r)) for r in all_rows])
-

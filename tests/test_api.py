@@ -9,7 +9,7 @@ EXTR = {"Authorization": "Bearer extract-token-456"}
 
 
 def client():
-    run_sync("test", lambda: ([ClientRecord("T1", "GAYATRI JAIN", "ABCPJ1234K"),
+    run_sync("test", lambda: ([ClientRecord("T1", "GAYATRI JAIN", "ABCPJ1234K", "D0001"),
                                ClientRecord("T2", "RAVI KUMAR", "DEFPK4567N")], "test"))
     return TestClient(api.app)
 
@@ -22,7 +22,8 @@ def test_auth_and_roles():
         assert c.get("/api/exceptional", headers=EXTR).status_code == 403      # extractor can't see the master
         assert c.post("/api/sync", headers=EXTR).status_code == 403
         assert c.get("/api/exceptional", headers=ADMIN).status_code == 200
-        assert c.get("/api/directory", headers=EXTR).json()["clients"][0]["name"] == "GAYATRI JAIN"
+        assert c.get("/api/directory", headers=EXTR).json()["clients"] == [
+            {"trading_code": "T1", "trading_account": "D0001", "name": "GAYATRI JAIN", "active": True}]
 
 
 def test_exceptional_crud_and_resolve():

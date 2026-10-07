@@ -96,3 +96,31 @@ def test_browser_login_rejected(fake, monkeypatch):
     with pytest.raises(LoginError) as e:
         FinesseClient().login()
     assert "Invalid credentials" in str(e.value)
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_angular_material_grid_like_real_finesse(fake, monkeypatch):
+    """Finesse's real grid: cdk-column-* cells, 'Name (ACCOUNT)', badges beside the name,
+    async rendering, a page-size dropdown and a Next button that pages in the browser."""
+    from finesse_sync import master
+    from finesse_sync.security import Cipher
+
+    from .fake_finesse import MAT_CLIENTS
+    monkeypatch.setenv("FINESSE_CLIENT_LIST_URL", "clients-material")
+    config.reset_settings()
+    r = run_sync("test")
+    assert r["status"] == "success", r
+    assert r["method"] == "playwright" and r["fetched"] == len(MAT_CLIENTS) == r["added"]
+    d = {x["trading_code"]: x for x in master.directory(include_inactive=True)}
+    assert d["PCA00001"]["name"] == "Alpha Imports Pvt Ltd" and d["PCA00001"]["trading_account"] == "D000001"
+    assert d["PCA00011"]["trading_account"] == "KJ26011"
+    assert "PCA00005" not in d                      # no trading account -> not offered for the A/c column
+    c = Cipher()
+    # badge text is not part of the name; PAN rule works by name, account or code
+    assert master.resolve_passwords(c, file_name="CN_0710_Esha Verma.pdf")["passwords"] == ["AAAPV0005E"]
+    assert master.resolve_passwords(c, file_name="CN_0710_D000013.pdf")["passwords"] == ["AAAPN0013N"]
+    assert master.resolve_passwords(c, trading_code="3000002")["passwords"] == ["AAAFB0002B"]
+    # an exceptional password entered against the trading account lands on the client code
+    added = master.add_exceptional(c, "dk7004", "deepa@123")
+    assert added["trading_code"] == "PCA00004" and added["known_client"]
+    assert master.resolve_passwords(c, file_name="x_Deepa Kulkarni.pdf")["passwords"] == ["deepa@123"]

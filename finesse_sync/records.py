@@ -12,9 +12,15 @@ from .config import get_settings
 
 NAME_HDR = re.compile(r"(client\s*_?name|^name$|full\s*_?name|holder|customer\s*_?name|clientname)", re.I)
 PAN_HDR = re.compile(r"(^pan$|pan\s*_?(no|number|card)?$|\bpan\b|panno|pan_number|incometax)", re.I)
-CODE_HDR = re.compile(
+# Finesse's own client code (e.g. PCA00141) — the stable key
+CODE_HDR = re.compile(r"(client\s*_?(code|id)|clientcode|^code$)", re.I)
+# Broker trading account (e.g. D062580) — what contract notes / the template use
+ACCT_HDR = re.compile(
     r"(trading\s*_?(a/?c|account|acct|code)(\s*_?(no|number|code))?|back\s*_?office\s*_?code|"
-    r"client\s*_?(code|id)|ucc|clientcode|acc(oun)?t\s*_?(no|number|code)|^code$)", re.I)
+    r"\bucc\b|acc(oun)?t\s*_?(no|number|code)|broker\s*_?code)", re.I)
+# "ABK Imports Pvt Ltd (D062580)" -> name + trading account (only when the bracket holds a digit,
+# so "(HUF)" stays part of the name)
+NAME_ACCT_RE = re.compile(r"^(.*?)\s*\(\s*((?=[^)]*\d)[A-Za-z0-9][A-Za-z0-9\-/]{1,24})\s*\)\s*$")
 
 
 class LayoutChangedError(RuntimeError):
@@ -23,9 +29,15 @@ class LayoutChangedError(RuntimeError):
 
 @dataclass
 class ClientRecord:
-    trading_code: str
+    trading_code: str          # Finesse client code (primary key)
     client_name: str
     pan: str
+    trading_account: str = ""  # broker trading account, if Finesse shows one
+
+
+def split_name_account(name: str) -> tuple[str, str]:
+    m = NAME_ACCT_RE.match(name or "")
+    return (m.group(1).strip(), m.group(2).upper()) if m else ((name or "").strip(), "")
 
 
 def _clean(v: Any) -> str:
@@ -47,23 +59,30 @@ def _pick(headers: list[str], configured: str, rx: re.Pattern, taken: set[str]) 
     return None
 
 
-def detect_columns(headers: list[str]) -> tuple[str, str, str]:
+def detect_columns(headers: list[str]) -> tuple[str, str, str, str | None]:
+    """Return (name, pan, key, account) column names. ``key`` is the client code column
+    (or the trading account column when Finesse has no client code); ``account`` is the
+    trading account column, or None (then it is read from "Name (ACCOUNT)")."""
     s = get_settings()
     taken: set[str] = set()
     pan = _pick(headers, s.field_pan, PAN_HDR, taken)
     if pan:
         taken.add(pan)
+    acct = _pick(headers, s.field_account, ACCT_HDR, taken)
+    if acct:
+        taken.add(acct)
     code = _pick(headers, s.field_code, CODE_HDR, taken)
     if code:
         taken.add(code)
     name = _pick(headers, s.field_name, NAME_HDR, taken)
-    missing = [n for n, v in (("client name", name), ("PAN", pan), ("trading account", code)) if not v]
+    key = code or acct
+    missing = [n for n, v in (("client name", name), ("PAN", pan), ("client code / trading account", key)) if not v]
     if missing:
         raise LayoutChangedError(
             "Could not find the " + ", ".join(missing) + " column(s) in the Finesse data. "
             f"Columns seen: {headers[:30]}. Set FINESSE_FIELD_NAME / FINESSE_FIELD_PAN / "
-            "FINESSE_FIELD_TRADING_CODE in .env to the exact column names.")
-    return name, pan, code  # type: ignore[return-value]
+            "FINESSE_FIELD_TRADING_CODE (client code) / FINESSE_FIELD_TRADING_ACCOUNT in .env to the exact column names.")
+    return name, pan, key, (acct if acct != key else None)  # type: ignore[return-value]
 
 
 def from_dicts(rows: Iterable[dict]) -> list[ClientRecord]:
@@ -75,10 +94,12 @@ def from_dicts(rows: Iterable[dict]) -> list[ClientRecord]:
         for k in r.keys():
             if k not in headers:
                 headers.append(k)
-    name, pan, code = detect_columns(headers)
+    name_col, pan_col, key_col, acct_col = detect_columns(headers)
     out = []
     for r in rows:
-        rec = ClientRecord(_clean(r.get(code)).upper(), _clean(r.get(name)), _clean(r.get(pan)))
+        name, in_brackets = split_name_account(_clean(r.get(name_col)))
+        acct = _clean(r.get(acct_col)).upper() if acct_col else ""
+        rec = ClientRecord(_clean(r.get(key_col)).upper(), name, _clean(r.get(pan_col)), acct or in_brackets)
         if rec.trading_code or rec.client_name or rec.pan:
             out.append(rec)
     return out

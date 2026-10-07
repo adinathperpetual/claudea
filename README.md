@@ -91,7 +91,17 @@ Methods in order of preference:
    - It uses `FINESSE_CLIENT_LIST_URL`, or clicks through `FINESSE_MENU_PATH` (default `Masters > Client Master`).
    - It picks the largest "rows per page" option and pages through the table.
 
-Columns are detected from their headers, e.g. "Client Name", "PAN No" and "Trading Account No" / "Client Code".
+**Finesse's client grid (Angular Material)** is read by its column classes:
+- `cdk-column-clientCode`: the client code, e.g. PCA00141. This is the stable key.
+- `cdk-column-clientName`: the name, with the broker trading account in brackets, e.g. `ABK Imports Pvt Ltd (D062580)`.
+  Badges such as "Joint" are ignored.
+- `cdk-column-clientPan`: the PAN.
+
+Clients without a bracketed account are still synced and unlocked by PAN.
+The extractor's Trading Account column is filled only for clients that have one.
+Exceptional passwords can be entered against either the client code or the trading account.
+
+For other layouts, columns are detected from their headers, e.g. "Client Name", "PAN No" and "Trading Account No" / "Client Code".
 If Finesse uses different labels, set `FINESSE_FIELD_NAME`, `FINESSE_FIELD_PAN` and `FINESSE_FIELD_TRADING_CODE`.
 
 ### 3. Run

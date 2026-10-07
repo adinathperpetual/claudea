@@ -23,6 +23,55 @@ CLIENTS = [
 ]
 
 
+# Synthetic clients shaped like the real Finesse Angular Material grid:
+# (client code, name, trading account shown in brackets or "", badge, PAN)
+MAT_CLIENTS = [
+    ("PCA00001", "Alpha Imports Pvt Ltd", "D000001", "", "AAACA0001A"),
+    ("PCA00002", "Beta Technologies", "3000002", "", "AAAFB0002B"),
+    ("PCA00003", "Chetan Rao", "3000003", "", "AAAPR0003C"),
+    ("PCA00004", "Deepa Kulkarni", "DK7004", "", "AAAPK0004D"),
+    ("PCA00005", "Esha Verma", "", "Joint", "AAAPV0005E"),
+    ("PCA00006", "Farhan Shaikh", "", "", "AAAPS0006F"),
+    ("PCA00007", "Gaurav Mehta", "", "Joint", "AAAPM0007G"),
+    ("PCA00008", "Harsh Jain", "4000008", "", "AAAPJ0008H"),
+    ("PCA00009", "Ishaan Kumar Jain HUF", "", "Proprietorship", "AAAHJ0009J"),
+    ("PCA00010", "Jaya Porwal", "3000010", "", "AAAPP0010K"),
+    ("PCA00011", "Kunal Joshi", "KJ26011", "", "AAAPJ0011L"),
+    ("PCA00012", "Lata Iyer", "6000012", "", "AAAPI0012M"),
+    ("PCA00013", "Manoj Nair", "D000013", "", "AAAPN0013N"),
+]
+
+MAT_PAGE = """<html><body><div class="app"><h1>Clients</h1>
+<table mat-table class="mat-mdc-table"><thead><tr mat-header-row class="mat-mdc-header-row">
+<th class="mat-mdc-header-cell cdk-column-clientCode">Code</th><th class="mat-mdc-header-cell cdk-column-clientName">Client</th>
+<th class="mat-mdc-header-cell cdk-column-familyName">Family</th><th class="mat-mdc-header-cell cdk-column-clientPan">PAN</th>
+<th class="mat-mdc-header-cell cdk-column-actions"></th></tr></thead><tbody role="rowgroup" id="rows"></tbody></table>
+<div class="mat-mdc-paginator"><div class="mat-mdc-paginator-page-size-select" id="sizeSel" style="cursor:pointer">5</div>
+<div id="overlay"></div>
+<button class="mat-mdc-paginator-navigation-next" aria-label="Next page" id="next">&gt;</button></div></div>
+<script>
+const data = __DATA__; let size = 5, page = 0;
+function render(){
+  const rows = data.slice(page*size, page*size+size).map(([code,name,acct,badge,pan]) =>
+    `<tr role="row" mat-row class="mat-mdc-row"><td class="mat-mdc-cell cdk-column-clientCode"><div class="flex"><div><span class="dot-green"></span></div><div class="ml-2"> ${code} </div></div></td>`+
+    `<td class="mat-mdc-cell cdk-column-clientName"><a title="Click to go to Profile View" href="#/profile/x"> ${name} ${acct?`<span>(${acct})</span>`:''}<!----></a>${badge?`<span class="badge"> ${badge} </span>`:''}</td>`+
+    `<td class="mat-mdc-cell cdk-column-familyName"> ${name} - Family </td><td class="mat-mdc-cell cdk-column-clientPan"> ${pan} </td>`+
+    `<td class="mat-mdc-cell cdk-column-actions"><button><span>visibility</span></button></td></tr>`).join('');
+  // the real grid redraws a moment after the click (no page load)
+  setTimeout(() => { document.getElementById('rows').innerHTML = rows;
+    const last = (page+1)*size >= data.length; const n = document.getElementById('next');
+    n.disabled = last; n.classList.toggle('mat-mdc-button-disabled', last); }, 400);
+}
+document.getElementById('next').onclick = () => { page++; render(); };
+document.getElementById('sizeSel').onclick = () => {
+  document.getElementById('overlay').innerHTML = [5,10].map(n => `<mat-option class="mat-mdc-option" data-n="${n}">${n}</mat-option>`).join('');
+  document.querySelectorAll('mat-option').forEach(o => o.onclick = () => { size = +o.dataset.n; page = 0;
+    document.getElementById('sizeSel').textContent = size; document.getElementById('overlay').innerHTML = ''; render(); });
+};
+setTimeout(render, 600);   // async first draw, like Angular
+</script></body></html>"""
+
+
 def make_app(state: dict) -> FastAPI:
     app = FastAPI()
     sessions: set[str] = set()
@@ -85,6 +134,13 @@ def make_app(state: dict) -> FastAPI:
         nxt = "<button disabled>Next</button>" if last else f"<a href='/finesse/clients?page={page + 1}'>Next</a>"
         return f"""<html><body><table><thead><tr><th>Client Code</th><th>Client Name</th><th>PAN No</th></tr></thead>
           <tbody>{trs}</tbody></table>{nxt}</body></html>"""
+
+    @app.get("/finesse/clients-material", response_class=HTMLResponse)
+    def clients_material(req: Request):
+        if not ok(req):
+            return RedirectResponse("/finesse")
+        import json
+        return MAT_PAGE.replace("__DATA__", json.dumps(MAT_CLIENTS))
 
     @app.get("/finesse/api/clients")
     def api_clients(req: Request, page: int = 1, pageSize: int = 500):

@@ -529,16 +529,16 @@
             </div>
             <div class="hint" id="fsSummary"></div>
             <div class="fs-sub">Exceptional-password clients <span class="ct" id="fsCount"></span></div>
-            <div class="hint" style="margin-top:6px">Default rule: the contract-note password is the client's <b>PAN in uppercase</b>. Only clients whose password is different are listed here. When a PDF is opened, its client's trading code is checked against this list first; if it isn't listed, the PAN from Finesse is used.</div>
+            <div class="hint" style="margin-top:6px">Default rule: the contract-note password is the client's <b>PAN in uppercase</b>. Only clients whose password is different are listed here. When a PDF is opened, its client is checked against this list first; if it isn't listed, the PAN from Finesse is used.</div>
             <div class="u-add" style="margin-top:12px">
-              <input type="text" id="fsNewCode" placeholder="Trading code…" autocomplete="off" autocapitalize="characters" />
+              <input type="text" id="fsNewCode" placeholder="Client code or trading account…" autocomplete="off" autocapitalize="characters" />
               <input type="password" id="fsNewPw" placeholder="Contract-note password…" autocomplete="new-password" />
               <input type="text" id="fsNewNote" placeholder="Note (optional)" autocomplete="off" />
               <button class="btn green" id="fsAdd">Add exceptional</button>
             </div>
             <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="reveal-btn" id="fsReveal">👁 Reveal passwords</button></div>
             <div class="fs-scroll">
-              <table class="usertable"><thead><tr><th>Client</th><th>Trading code</th><th>PAN</th><th>Password</th><th>Finesse</th><th style="text-align:right">Actions</th></tr></thead>
+              <table class="usertable"><thead><tr><th>Client</th><th>Client code</th><th>Trading A/c</th><th>PAN</th><th>Password</th><th>Finesse</th><th style="text-align:right">Actions</th></tr></thead>
                 <tbody id="fsRows"></tbody></table>
             </div>
             <div id="fsLogs" style="display:none">
@@ -3374,7 +3374,7 @@ async function fsInit(){
     await fsFetch("/api/whoami");
     fs.up = true;
     const d = await fsFetch("/api/directory");
-    fs.dir = (d.clients||[]).map(c => ({ name:c.name, acct:c.trading_code }));
+    fs.dir = (d.clients||[]).map(c => ({ name:c.name, acct:c.trading_account }));
     recomputeAccounts();
   } catch(e){
     fs.up = false; fs.dir = [];
@@ -3429,11 +3429,12 @@ function fsRenderRows(items){
   $("#cmCount").textContent = `${codes.size} exceptional`;
   const tb = $("#fsRows"); tb.innerHTML = "";
   if (!items.length){
-    const tr = el("tr"); const td = el("td", null, "No exceptional clients — every PDF uses the PAN rule."); td.colSpan = 6; tr.append(td); tb.append(tr); return;
+    const tr = el("tr"); const td = el("td", null, "No exceptional clients — every PDF uses the PAN rule."); td.colSpan = 7; tr.append(td); tb.append(tr); return;
   }
   items.forEach(it => {
     const tr = el("tr");
-    tr.append(el("td", null, it.client_name || "—"), el("td", "mono", it.trading_code), el("td", "mono", it.pan_masked || "—"),
+    tr.append(el("td", null, it.client_name || "—"), el("td", "mono", it.trading_code), el("td", "mono", it.trading_account || "—"),
+              el("td", "mono", it.pan_masked || "—"),
               el("td", "mono", it.password));
     const st = el("td"); st.innerHTML = `<span class="fs-pill ${esc(it.status)}" title="${esc(it.missing_since ? "Missing since " + fsWhen(it.missing_since) : "")}">${esc(FS_STATUS_TXT[it.status]||it.status)}</span>`;
     if (it.note) st.title = it.note;
@@ -3501,7 +3502,7 @@ $("#fsSync").onclick = async () => {
 };
 $("#fsAdd").onclick = async () => {
   const code = $("#fsNewCode").value.trim(), pw = $("#fsNewPw").value.trim(), note = $("#fsNewNote").value.trim();
-  if (!code || !pw){ toast("Enter the trading code and the password."); return; }
+  if (!code || !pw){ toast("Enter the client code (or trading account) and the password."); return; }
   try{
     const r = await fsFetch("/api/exceptional", { admin:true, method:"POST",
       body:{ trading_code: code, password: pw, note, user: authCurrent ? authCurrent.username : "" } });

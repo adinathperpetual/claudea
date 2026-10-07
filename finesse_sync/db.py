@@ -24,6 +24,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS clients (
     trading_code   TEXT PRIMARY KEY,
     client_name    TEXT NOT NULL,
+    trading_account TEXT NOT NULL DEFAULT '',
     pan_enc        TEXT,
     pan_valid      INTEGER NOT NULL DEFAULT 0,
     active         INTEGER NOT NULL DEFAULT 1,
@@ -79,6 +80,10 @@ def init_db() -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     with connect() as c:
         c.executescript(SCHEMA)
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(clients)")}
+        if "trading_account" not in cols:          # upgrade databases from the first version
+            c.execute("ALTER TABLE clients ADD COLUMN trading_account TEXT NOT NULL DEFAULT ''")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_clients_acct ON clients(trading_account)")
 
 
 @contextmanager
@@ -106,16 +111,28 @@ def get_client(conn, code: str):
     return conn.execute("SELECT * FROM clients WHERE trading_code = ?", (code,)).fetchone()
 
 
-def insert_client(conn, code, name, pan_enc, pan_valid, ts):
+def insert_client(conn, code, name, pan_enc, pan_valid, ts, account=""):
     conn.execute(
-        "INSERT INTO clients (trading_code, client_name, pan_enc, pan_valid, active, first_seen_at, last_seen_at, updated_at)"
-        " VALUES (?,?,?,?,1,?,?,?)", (code, name, pan_enc, int(pan_valid), ts, ts, ts))
+        "INSERT INTO clients (trading_code, client_name, trading_account, pan_enc, pan_valid, active, first_seen_at,"
+        " last_seen_at, updated_at) VALUES (?,?,?,?,?,1,?,?,?)", (code, name, account, pan_enc, int(pan_valid), ts, ts, ts))
 
 
-def update_client(conn, code, name, pan_enc, pan_valid, ts):
+def update_client(conn, code, name, pan_enc, pan_valid, ts, account=""):
     conn.execute(
-        "UPDATE clients SET client_name=?, pan_enc=?, pan_valid=?, active=1, missing_since=NULL,"
-        " last_seen_at=?, updated_at=? WHERE trading_code=?", (name, pan_enc, int(pan_valid), ts, ts, code))
+        "UPDATE clients SET client_name=?, trading_account=?, pan_enc=?, pan_valid=?, active=1, missing_since=NULL,"
+        " last_seen_at=?, updated_at=? WHERE trading_code=?", (name, account, pan_enc, int(pan_valid), ts, ts, code))
+
+
+def code_for(conn, value: str) -> str | None:
+    """Client code for a value that is either a client code or a trading account."""
+    v = (value or "").strip().upper()
+    if not v:
+        return None
+    r = conn.execute("SELECT trading_code FROM clients WHERE trading_code=?", (v,)).fetchone()
+    if r:
+        return r[0]
+    rows = conn.execute("SELECT trading_code FROM clients WHERE UPPER(trading_account)=?", (v,)).fetchall()
+    return rows[0][0] if len(rows) == 1 else None
 
 
 def touch_client(conn, code, ts, reactivate: bool):
