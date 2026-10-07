@@ -119,6 +119,55 @@ setTimeout(() => {
 """
 
 
+# "Client Master Report" as Finesse offers it: Reports > Corporate Reports > (left panel)
+# Other Reports > dropdown > Generate -> an Excel download with title rows and extra columns.
+REPORT_CLIENTS = [
+    # code, name, family, pan, joint holder pan, trading account, bank account
+    ("PCA00101", "Rohan Desai", "Rohan Desai - Family", "AAAPD0101A", "AAAPD0909Z", "D100101", "50100011122233"),
+    ("PCA00102", "Sneha Kulkarni", "Kulkarni - Family", "AAAPK0102B", "", "3100102", "50100011122234"),
+    ("PCA00103", "Tejas Shah HUF", "Shah - Family", "AAAHS0103C", "", "", "50100011122235"),
+    ("PCA00104", "Usha Rao", "Rao - Family", "AAAPR0104D", "", "UR4104", "50100011122236"),
+]
+
+CORP_REPORTS = """<html><body><h1>Corporate Reports</h1>
+<aside><mat-expansion-panel-header id="other" style="cursor:pointer">Other Reports</mat-expansion-panel-header>
+<div id="panel"></div></aside><main id="main"></main><div id="overlay"></div>
+<script>
+document.getElementById('other').onclick = () => {
+  document.getElementById('panel').innerHTML = '<mat-select id="sel" role="combobox" style="cursor:pointer">Select report</mat-select>';
+  document.getElementById('sel').onclick = () => {
+    document.getElementById('overlay').innerHTML = ['Client Ledger', 'Client Master Report', 'Holding Report']
+      .map(n => `<mat-option role="option" style="cursor:pointer">${n}</mat-option>`).join('');
+    document.querySelectorAll('mat-option').forEach(o => o.onclick = () => {
+      document.getElementById('overlay').innerHTML = '';
+      document.getElementById('sel').textContent = o.textContent;
+      document.getElementById('main').innerHTML = `<h2>${o.textContent}</h2><button id="gen">Generate</button>`;
+      document.getElementById('gen').onclick = () => setTimeout(() => {
+        const a = document.createElement('a'); a.href = '/finesse/report/client-master'; a.download = 'ClientMasterReport.xlsx';
+        document.body.append(a); a.click(); }, 1500);
+    });
+  };
+};
+</script></body></html>"""
+
+
+def report_xlsx() -> bytes:
+    import io
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Perpetual Investments — Client Master Report"])
+    ws.append(["Generated on 07-10-2026"])
+    ws.append([])
+    ws.append(["Sr No", "Client Code", "Client Name", "Family Name", "PAN", "Joint Holder PAN",
+               "Trading Account No", "Bank Account No", "RM Name"])
+    for i, (code, name, fam, pan, jpan, acct, bank) in enumerate(REPORT_CLIENTS, 1):
+        ws.append([i, code, name, fam, pan, jpan, acct, bank, "Nikhil"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def make_app(state: dict) -> FastAPI:
     app = FastAPI()
     sessions: set[str] = set()
@@ -183,6 +232,21 @@ def make_app(state: dict) -> FastAPI:
     async def fuse_login(req: Request):
         return await api_login(req)
 
+    @app.get("/finesse/corporate-reports", response_class=HTMLResponse)
+    def corporate_reports(req: Request):
+        if not ok(req):
+            return RedirectResponse("/finesse")
+        return CORP_REPORTS
+
+    @app.get("/finesse/report/client-master")
+    def report_download(req: Request):
+        from fastapi.responses import Response
+        if not ok(req):
+            return RedirectResponse("/finesse")
+        state["reports"] = state.get("reports", 0) + 1
+        return Response(report_xlsx(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": 'attachment; filename="ClientMasterReport.xlsx"'})
+
     @app.get("/finesse/blank", response_class=HTMLResponse)
     def blank():
         return "<html><body><p>Maintenance</p></body></html>"
@@ -191,7 +255,11 @@ def make_app(state: dict) -> FastAPI:
     def home(req: Request):
         if not ok(req):
             return RedirectResponse("/finesse")
-        return "<html><body><nav><a href='#'>Masters</a> <a href='/finesse/clients'>Client Master</a></nav></body></html>"
+        return ("<html><body><nav><a href='#'>Masters</a> <a href='/finesse/clients'>Client Master</a></nav>"
+                "<header><span id='rep' style='cursor:pointer'>Reports</span><div id='repmenu'></div></header>"
+                "<script>document.getElementById('rep').onclick = () => { document.getElementById('repmenu').innerHTML ="
+                " \"<a href='/finesse/corporate-reports'>Corporate Reports</a> <a href='#'>Client Reports</a>\"; };</script>"
+                "</body></html>")
 
     @app.get("/finesse/clients", response_class=HTMLResponse)
     def clients(req: Request, page: int = 1):

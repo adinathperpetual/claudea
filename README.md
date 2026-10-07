@@ -75,7 +75,26 @@ python -m finesse_sync test-login
 On a wrong ID, password or PAN you get a clear "Finesse rejected the login: …" message.
 If the login fields can't be found, the message says to set `FINESSE_SEL_*` in `.env`.
 
-### 2. Choose the fetch method
+### 2. How clients are fetched (default: the Client Master Report)
+
+By default the tool does what a person would do in Finesse:
+
+1. Log in.
+2. Open **Reports → Corporate Reports**, then **Other Reports** in the left panel.
+3. Choose **Client Master Report** in the dropdown and click **Generate**.
+4. Read the downloaded file. It is read in memory and deleted at once, because it holds PANs.
+
+It accepts .xlsx and .csv files, plus ".xls" files that are really HTML tables or Excel 2003 XML.
+It skips title rows above the column headings.
+It takes the client's own Name, PAN and Trading Account columns, not "Joint Holder PAN", "Family Name" or "Bank Account No".
+
+If Finesse renames a menu, report or button, change `FINESSE_REPORT_PATH`, `FINESSE_REPORT_NAME` or `FINESSE_REPORT_BUTTON` in `.env`.
+If something isn't found, the error points to `data/finesse_report_page.txt` and a screenshot.
+They list the menus and options that were visible.
+If the report path fails, the tool falls back to reading the on-screen client table.
+
+### Other fetch methods (optional)
+
 
 Methods in order of preference:
 

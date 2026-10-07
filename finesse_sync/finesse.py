@@ -16,6 +16,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, TypeVar
 from urllib.parse import urljoin, urlparse
 
@@ -228,6 +229,8 @@ class FinesseClient:
             plan.append(("export", self._fetch_export))
         if method in ("auto", "api") and self.s.finesse_api_url:
             plan.append(("api", self._fetch_api))
+        if method in ("auto", "report") and self.s.finesse_report_name:
+            plan.append(("report", self._fetch_report))
         if method in ("auto", "playwright"):
             plan.append(("playwright", self._fetch_browser))
         if not plan:
@@ -236,7 +239,7 @@ class FinesseClient:
         errors = []
         for name, fn in plan:
             try:
-                recs = self._with_relogin(fn) if name != "playwright" else fn()
+                recs = self._with_relogin(fn) if name in ("export", "api") else fn()
                 if recs:
                     return recs, name
                 errors.append(f"{name}: returned no clients")
@@ -309,18 +312,24 @@ class FinesseClient:
             page += 1
         return from_dicts(out)
 
-    def _fetch_browser(self) -> list[ClientRecord]:
+    def _in_browser(self, work: Callable[["BrowserSession"], list[ClientRecord]]) -> list[ClientRecord]:
         if self.session is None:
             self.session = self.store.load()      # reuse saved cookies if still valid
         with BrowserSession(self.s, self.session) as b:
             if not b.is_logged_in():
                 b.login()
-            recs = b.read_client_list()
+            recs = work(b)
             st = b.session_state()
             st.created_at = time.time()
             self.session = st
             self.store.save(st)
             return recs
+
+    def _fetch_browser(self) -> list[ClientRecord]:
+        return self._in_browser(lambda b: b.read_client_list())
+
+    def _fetch_report(self) -> list[ClientRecord]:
+        return self._in_browser(lambda b: b.download_client_master_report())
 
 
 def _find_token(d: Any, depth: int = 0) -> str:
@@ -387,6 +396,8 @@ class BrowserSession:
                                       for c in self.initial.cookies if c.get("domain")])
             except Exception:  # noqa: BLE001
                 pass
+        self.downloads: list = []
+        self.ctx.on("page", lambda p: p.on("download", lambda d: self.downloads.append(d)))
         self.page = self.ctx.new_page()
         host = urlparse(self.s.finesse_base_url).hostname or ""
         self.page.on("request", lambda req: self._on_request(req, host))
@@ -723,6 +734,136 @@ class BrowserSession:
         elif self._password_visible():
             raise LoginError("Finesse login failed — still on the login page. Check the Finesse User ID, Password and PAN "
                              "(run SETUP.bat again to correct them).")
+
+    # ---- Client Master Report (Reports > Corporate Reports > Other Reports > report > Generate)
+    def _click_text(self, text: str, wait_s: float = 15) -> bool:
+        """Click the visible element whose text is ``text`` (exact first, then contains),
+        preferring links, buttons, menu items and panel headers."""
+        deadline = time.time() + wait_s
+        while time.time() < deadline:
+            for exact in (True, False):
+                loc = self.page.get_by_text(text, exact=exact)
+                for i in range(min(loc.count(), 15)):
+                    el = loc.nth(i)
+                    try:
+                        if not el.is_visible():
+                            continue
+                        target = el.locator(f"xpath=ancestor-or-self::*[self::a or self::button or @role='menuitem' "
+                                            f"or @role='tab' or @role='button' or self::mat-expansion-panel-header][1]")
+                        (target.first if target.count() else el).click()
+                        self.page.wait_for_timeout(800)
+                        return True
+                    except Exception:  # noqa: BLE001
+                        continue
+            self.page.wait_for_timeout(500)
+        return False
+
+    def _choose_report(self, name: str) -> bool:
+        """Pick ``name`` in the report dropdown (native <select>, mat-select or a plain list)."""
+        want = name.strip().lower()
+        for i in range(self.page.locator("select").count()):
+            sel = self.page.locator("select").nth(i)
+            try:
+                if not sel.is_visible():
+                    continue
+                for o in sel.locator("option").all():
+                    if want in (o.inner_text() or "").strip().lower():
+                        sel.select_option(label=o.inner_text().strip())
+                        self.page.wait_for_timeout(800)
+                        return True
+            except Exception:  # noqa: BLE001
+                continue
+        triggers = self.page.locator("mat-select, [role=combobox], .mat-mdc-select, ng-select, .dropdown-toggle")
+        for i in range(min(triggers.count(), 10)):
+            t = triggers.nth(i)
+            try:
+                if not t.is_visible():
+                    continue
+                t.click()
+                self.page.wait_for_timeout(600)
+                opts = self.page.locator("mat-option, [role=option], .ng-option, .dropdown-item")
+                for j in range(min(opts.count(), 200)):
+                    o = opts.nth(j)
+                    if want in (o.inner_text() or "").strip().lower():
+                        o.scroll_into_view_if_needed()
+                        o.click()
+                        self.page.wait_for_timeout(800)
+                        return True
+                self.page.keyboard.press("Escape")
+            except Exception:  # noqa: BLE001
+                continue
+        return self._click_text(name, wait_s=3)     # a plain list of report names
+
+    def _save_page_debug(self, stem: str, note: str) -> str:
+        try:
+            d = self.s.data_dir
+            d.mkdir(parents=True, exist_ok=True)
+            texts = []
+            for el in self.page.locator("a, button, [role=menuitem], [role=tab], mat-expansion-panel-header, "
+                                        "mat-select, select, mat-option, [role=option]").all()[:120]:
+                try:
+                    if el.is_visible():
+                        t = re.sub(r"\s+", " ", el.inner_text() or "").strip()
+                        if t:
+                            texts.append(t[:50])
+                except Exception:  # noqa: BLE001
+                    pass
+            path = d / f"{stem}.txt"
+            path.write_text(redact(f"{note}\nURL: {self.page.url}\n\nVisible menus / buttons / options:\n  "
+                                   + "\n  ".join(texts)), encoding="utf-8")
+            self.page.screenshot(path=str(d / f"{stem}.png"), full_page=True)
+            return str(path)
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _report_error(self, what: str) -> LayoutChangedError:
+        path = self._save_page_debug("finesse_report_page", what)
+        return LayoutChangedError(what + (f" Details saved to {path} (and a screenshot next to it)." if path else ""))
+
+    def download_client_master_report(self) -> list[ClientRecord]:
+        s = self.s
+        self._goto(s.base_url, "Open Finesse")
+        for item in s.finesse_report_path:
+            if not self._click_text(item):
+                raise self._report_error(f"Report menu item {item!r} not found (FINESSE_REPORT_PATH).")
+        if not self._choose_report(s.finesse_report_name):
+            raise self._report_error(f"Report {s.finesse_report_name!r} not found in the report list (FINESSE_REPORT_NAME).")
+        self.downloads.clear()
+        if not self._click_text(s.finesse_report_button):
+            raise self._report_error(f"Button {s.finesse_report_button!r} not found (FINESSE_REPORT_BUTTON).")
+        log.info("Generating the %s…", s.finesse_report_name)
+        deadline = time.time() + s.finesse_report_timeout
+        nudged = False
+        while not self.downloads and time.time() < deadline:
+            self.page.wait_for_timeout(1000)
+            # some reports show a Download / Export button once ready
+            if not nudged and time.time() > deadline - s.finesse_report_timeout + 15:
+                for t in ("Download", "Download Excel", "Export to Excel", "Export"):
+                    if self._click_text(t, wait_s=0.5):
+                        nudged = True
+                        break
+        if not self.downloads:
+            try:            # no file: the report may have been shown on screen instead
+                head, rows = self._pick_table()
+                return from_dicts([dict(zip(head, r)) for r in rows])
+            except LayoutChangedError:
+                pass
+            raise self._report_error(f"Finesse did not download the {s.finesse_report_name} within "
+                                     f"{s.finesse_report_timeout}s (FINESSE_REPORT_TIMEOUT_SECONDS).")
+        dl = self.downloads[-1]
+        path = dl.path()
+        if not path:
+            raise FinesseError(f"The report download failed: {dl.failure() or 'unknown error'}")
+        data = Path(path).read_bytes()
+        name = dl.suggested_filename or "report"
+        log.info("Report downloaded (%s, %d KB) — reading it", name, len(data) // 1024)
+        try:
+            return from_file_bytes(data, name)
+        finally:
+            try:
+                dl.delete()          # the file holds PANs: don't leave it on disk
+            except Exception:  # noqa: BLE001
+                pass
 
     # ---- finding the client list page
     COMMON_CLIENT_ROUTES = ("#/clients", "#/client", "#/client-list", "#/clients/list", "#/client-master",

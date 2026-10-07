@@ -158,3 +158,18 @@ def test_secrets_redacted_from_logs(monkeypatch, caplog):
     caplog.handler.addFilter(config._RedactSecrets())
     logging.getLogger("finesse_sync.x").error("login with %s failed", "Sup3rSecret!")
     assert "Sup3rSecret!" not in caplog.text and "***" in caplog.text
+
+
+def test_report_files_in_disguise():
+    rows = [["Client Master Report"], ["Client Code", "Client Name", "PAN", "Joint Holder PAN", "Trading Account No"],
+            ["PCA1", "Asha Rao", "AAAPR1111A", "BBBPR2222B", "D11"]]
+    html = "<html><body><table>" + "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows) + \
+        "</table></body></html>"
+    xml = ('<?xml version="1.0"?><Workbook><Worksheet><Table>' + "".join(
+        "<Row>" + "".join(f'<Cell><Data ss:Type="String">{c}</Data></Cell>' for c in r) + "</Row>" for r in rows)
+        + "</Table></Worksheet></Workbook>")
+    want = [ClientRecord("PCA1", "Asha Rao", "AAAPR1111A", "D11")]
+    assert from_file_bytes(html.encode(), "ClientMaster.xls") == want      # HTML saved as .xls
+    assert from_file_bytes(xml.encode(), "ClientMaster.xls") == want       # Excel 2003 XML
+    with pytest.raises(LayoutChangedError):
+        from_file_bytes(b"<html><form><input type=password></form></html>", "x.xls")

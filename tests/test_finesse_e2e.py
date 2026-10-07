@@ -33,6 +33,7 @@ def fake(monkeypatch):
         monkeypatch.setenv("FINESSE_USER_ID", USER)
         monkeypatch.setenv("FINESSE_PASSWORD", PASSWORD)
         monkeypatch.setenv("FINESSE_PAN", PAN.lower())
+        monkeypatch.setenv("FINESSE_REPORT_NAME", "")   # report flow only in its own test
         if os.path.exists(LOCAL_CHROMIUM):
             monkeypatch.setenv("FINESSE_BROWSER_PATH", LOCAL_CHROMIUM)
         config.reset_settings()
@@ -184,3 +185,25 @@ def test_client_list_found_without_menu_path_and_remembered(fake, monkeypatch, t
     assert cached.endswith("/finesse/clients")
     r = run_sync("test")                                   # second run goes straight there
     assert r["fetched"] == len(CLIENTS)
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_client_master_report_download(fake, monkeypatch, tmp_path):
+    """Reports > Corporate Reports > Other Reports > 'Client Master Report' > Generate > xlsx."""
+    from finesse_sync import master
+    from finesse_sync.security import Cipher
+
+    from .fake_finesse import REPORT_CLIENTS
+    monkeypatch.setenv("FINESSE_REPORT_NAME", "Client Master Report")
+    config.reset_settings()
+    r = run_sync("test")
+    assert r["method"] == "report" and r["status"] == "success", r
+    assert r["fetched"] == len(REPORT_CLIENTS) and fake.state["reports"] == 1
+    d = {x["trading_code"]: x for x in master.directory(include_inactive=True)}
+    assert d["PCA00101"] == {"trading_code": "PCA00101", "trading_account": "D100101",
+                             "name": "Rohan Desai", "active": True}
+    c = Cipher()
+    # the client's own PAN, not the joint holder's; HUF without an account still unlocks by PAN
+    assert master.resolve_passwords(c, trading_code="D100101")["passwords"] == ["AAAPD0101A"]
+    assert master.resolve_passwords(c, file_name="CN_Tejas Shah HUF.pdf")["passwords"] == ["AAAHS0103C"]
+    assert not list(tmp_path.glob("**/*.xlsx"))          # the downloaded report is not kept

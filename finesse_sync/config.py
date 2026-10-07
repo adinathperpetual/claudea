@@ -79,6 +79,12 @@ class Settings:
     # Field names the login endpoint expects for user id, password, PAN (in that order)
     finesse_login_api_fields: list[str] = field(default_factory=lambda: _list("FINESSE_LOGIN_API_FIELDS", "userId,password,pan"))
     finesse_login_api_format: str = field(default_factory=lambda: _env("FINESSE_LOGIN_API_FORMAT", "json").lower())
+    # 2b) the "Client Master Report": click through the menus, Generate, read the download
+    finesse_report_path: list[str] = field(default_factory=lambda: [p.strip() for p in _env(
+        "FINESSE_REPORT_PATH", "Reports > Corporate Reports > Other Reports").split(">") if p.strip()])
+    finesse_report_name: str = field(default_factory=lambda: _env("FINESSE_REPORT_NAME", "Client Master Report"))
+    finesse_report_button: str = field(default_factory=lambda: _env("FINESSE_REPORT_BUTTON", "Generate"))
+    finesse_report_timeout: int = field(default_factory=lambda: _int("FINESSE_REPORT_TIMEOUT_SECONDS", 300))
     # 3) browser automation fallback
     finesse_client_list_url: str = field(default_factory=lambda: _env("FINESSE_CLIENT_LIST_URL"))
     finesse_menu_path: list[str] = field(default_factory=lambda: [p.strip() for p in _env("FINESSE_MENU_PATH", "Masters > Client Master").split(">") if p.strip()])

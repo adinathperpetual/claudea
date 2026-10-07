@@ -6,6 +6,7 @@ import csv
 import io
 import re
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from typing import Any, Iterable
 
 from .config import get_settings
@@ -18,6 +19,9 @@ CODE_HDR = re.compile(r"(client\s*_?(code|id)|clientcode|^code$)", re.I)
 ACCT_HDR = re.compile(
     r"(trading\s*_?(a/?c|account|acct|code)(\s*_?(no|number|code))?|back\s*_?office\s*_?code|"
     r"\bucc\b|acc(oun)?t\s*_?(no|number|code)|broker\s*_?code)", re.I)
+NOT_CLIENT_HDR = re.compile(
+    r"(family|manager|\brm\b|joint|second|third|nominee|guardian|father|mother|spouse|bank|branch|"
+    r"\bdp\b|depository|group|introducer|referr|partner|sub\s*broker|ifsc|micr)", re.I)
 # "ABK Imports Pvt Ltd (D062580)" -> name + trading account (only when the bracket holds a digit,
 # so "(HUF)" stays part of the name)
 NAME_ACCT_RE = re.compile(r"^(.*?)\s*\(\s*((?=[^)]*\d)[A-Za-z0-9][A-Za-z0-9\-/]{1,24})\s*\)\s*$")
@@ -53,8 +57,14 @@ def _pick(headers: list[str], configured: str, rx: re.Pattern, taken: set[str]) 
             if h.strip().lower() == configured.strip().lower():
                 return h
         raise LayoutChangedError(f"Configured column {configured!r} not found in Finesse data. Columns seen: {headers[:30]}")
-    for h in headers:
-        if h not in taken and rx.search(str(h)):
+    # First pass skips other people's / other things' columns ("Joint Holder PAN",
+    # "Family Name", "Bank Account No", "RM Name" …); second pass takes any match.
+    for strict in (True, False):
+        for h in headers:
+            if h in taken or not rx.search(str(h)):
+                continue
+            if strict and NOT_CLIENT_HDR.search(str(h)):
+                continue
             return h
     return None
 
@@ -99,7 +109,11 @@ def from_dicts(rows: Iterable[dict]) -> list[ClientRecord]:
     for r in rows:
         name, in_brackets = split_name_account(_clean(r.get(name_col)))
         acct = _clean(r.get(acct_col)).upper() if acct_col else ""
-        rec = ClientRecord(_clean(r.get(key_col)).upper(), name, _clean(r.get(pan_col)), acct or in_brackets)
+        acct = acct or in_brackets
+        pan = _clean(r.get(pan_col))
+        # key: client code; else trading account; else PAN (stable, always present)
+        key = _clean(r.get(key_col)).upper() or acct or re.sub(r"\s+", "", pan).upper()
+        rec = ClientRecord(key, name, pan, acct)
         if rec.trading_code or rec.client_name or rec.pan:
             out.append(rec)
     return out
@@ -110,27 +124,68 @@ def from_table(headers: list[str], rows: list[list[str]]) -> list[ClientRecord]:
     return from_dicts([dict(zip(headers, r)) for r in rows])
 
 
+class _TableGrid(HTMLParser):
+    """Rows of every HTML table — also Excel 2003 XML (<Row><Cell><Data>), which many
+    back-office systems save with an .xls name."""
+
+    def __init__(self):
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("tr", "row"):
+            self._row = []
+        elif tag in ("td", "th", "cell") and self._row is not None:
+            self._cell = []
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th", "cell") and self._row is not None and self._cell is not None:
+            self._row.append(_clean("".join(self._cell)))
+            self._cell = None
+        elif tag in ("tr", "row") and self._row is not None:
+            if any(self._row):
+                self.rows.append(self._row)
+            self._row = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _markup_grid(text: str) -> list[list[str]]:
+    p = _TableGrid()
+    p.feed(text)
+    return p.rows
+
+
 def from_file_bytes(data: bytes, filename: str = "", content_type: str = "") -> list[ClientRecord]:
-    """Parse a CSV / Excel export."""
+    """Parse a report file: .xlsx / .xls (real or HTML/XML in disguise) / .csv / .txt."""
     import pandas as pd
 
     name = filename.lower()
-    is_excel = name.endswith((".xlsx", ".xls")) or "spreadsheet" in content_type or "excel" in content_type \
-        or data[:4] == b"PK\x03\x04" or data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    head = data[:2048].lstrip(b"\xef\xbb\xbf \r\n\t").lower()
+    is_markup = head.startswith(b"<")
+    is_excel = not is_markup and (name.endswith((".xlsx", ".xls", ".xlsm")) or "spreadsheet" in content_type
+                                  or "excel" in content_type or data[:4] == b"PK\x03\x04"
+                                  or data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
     try:
-        if is_excel:
+        if is_markup:
+            grid = _markup_grid(data.decode("utf-8-sig", errors="replace"))
+            if not grid or (re.search(rb"type=[\"']?password", data[:200000], re.I) and not any(
+                    PAN_HDR.search(" | ".join(r)) for r in grid[:25])):
+                raise LayoutChangedError("Finesse returned a web page instead of the report file "
+                                         "(session expired or the page changed).")
+        elif is_excel:
             raw = pd.read_excel(io.BytesIO(data), dtype=str, header=None)
-        else:
-            text = data.decode("utf-8-sig", errors="replace")
-            if text.lstrip().startswith("<"):
-                raise LayoutChangedError("Finesse returned an HTML page instead of a report file (session expired or URL changed).")
-            grid = read_delimited(text)
-        if is_excel:
             grid = [[_clean(c) for c in row] for row in raw.fillna("").values.tolist()]
+        else:
+            grid = read_delimited(data.decode("utf-8-sig", errors="replace"))
     except LayoutChangedError:
         raise
     except Exception as e:  # noqa: BLE001
-        raise LayoutChangedError(f"Could not read the Finesse export file: {e}") from e
+        raise LayoutChangedError(f"Could not read the Finesse report file: {e}") from e
     # Reports often have title rows above the header: use the first row that looks like the header.
     for i, row in enumerate(grid[:25]):
         joined = " | ".join(row)
