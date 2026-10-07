@@ -204,7 +204,7 @@ function upload(){
     if (kind !== 'excel' || !f) { snack('Error: select Excel Upload and a file'); return; }
     const fd = new FormData(); fd.append('file', f);
     const r = await fetch('api/eq-upload', {method: 'POST', body: fd}); const j = await r.json();
-    setTimeout(() => snack(j.message), 700);
+    if (!j.quiet) setTimeout(() => snack(j.message), 700);      // quiet: Finesse shows nothing
   };
 }
 async function staging(){
@@ -398,6 +398,8 @@ def make_app(state: dict) -> FastAPI:
         from openpyxl import load_workbook
         if not ok(req):
             return JSONResponse({"message": "Session expired"}, status_code=401)
+        if state.get("upload_fail"):
+            return JSONResponse({"message": "Invalid file format"}, status_code=400)
         form = await req.form()
         ws = load_workbook(io.BytesIO(await form["file"].read()), data_only=True).active
         rows = list(ws.iter_rows(values_only=True))
@@ -418,7 +420,7 @@ def make_app(state: dict) -> FastAPI:
             state["next_id"] += 1
             n += 1
         state["uploads"] = state.get("uploads", 0) + 1
-        return {"message": f"File uploaded successfully ({n} transactions)"}
+        return {"message": f"File uploaded successfully ({n} transactions)", "quiet": bool(state.get("quiet_upload"))}
 
     @app.get("/finesse/api/staging")
     def staging_rows(req: Request, account: str = "", tab: str = "All"):

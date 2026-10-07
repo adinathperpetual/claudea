@@ -126,3 +126,25 @@ def test_bad_file_is_refused_before_touching_finesse(fake):
     with pytest.raises(poster.PostError):
         poster.start(template([("", "No Account", "2026-10-08", "INE111A01011", "PURCHASE", 1, 10)]), "t.xlsx")
     assert fake.state.get("uploads", 0) == 0
+
+
+def test_upload_finishes_on_finesse_reply_even_without_a_message(fake):
+    """Your case: Finesse uploads the file but shows no pop-up — must not sit at 'Uploading'."""
+    fake.state["quiet_upload"] = True
+    data = template([("AC9001", "Adinath Chavhan", "2026-10-10", "INE111A01011", "PURCHASE", 4, 40)])
+    t0 = time.time()
+    job_id = poster.start(data, "t.xlsx")
+    j = wait(job_id, "awaiting_confirmation", "failed", timeout=60)
+    assert j["status"] == "awaiting_confirmation", j["message"]
+    assert "uploaded successfully" in j["data"]["upload_message"]       # read from Finesse's reply
+    assert time.time() - t0 < 40
+    assert poster.learned("upload_api").endswith("api/eq-upload")
+    poster.cancel(job_id)
+
+
+def test_upload_rejected_by_finesse_stops_with_its_reason(fake):
+    fake.state["upload_fail"] = True
+    data = template([("AC9001", "Adinath Chavhan", "2026-10-10", "INE111A01011", "PURCHASE", 4, 40)])
+    j = wait(poster.start(data, "t.xlsx"), "awaiting_confirmation", "failed", timeout=90)
+    assert j["status"] == "failed" and "Invalid file format" in j["message"]
+    assert fake.state["posted"] == []

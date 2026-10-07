@@ -32,7 +32,8 @@ from .records import LayoutChangedError
 log = logging.getLogger("finesse_sync.poster")
 
 _lock = threading.Lock()          # one upload/post job at a time
-MSG_SEL = ("simple-snack-bar, .mat-mdc-snack-bar-container, mat-snack-bar-container, .toast, .toast-message, "
+MSG_SEL = ("fuse-alert, .ngx-toastr, #toast-container, .mat-mdc-snack-bar-label, "
+           "simple-snack-bar, .mat-mdc-snack-bar-container, mat-snack-bar-container, .toast, .toast-message, "
            "[role=alert], [role=status], mat-dialog-container, .swal2-popup, .alert, .notification")
 
 
@@ -388,7 +389,28 @@ def _close_dialog(b: BrowserSession, labels: tuple, wait_s: float = 2, learn_key
     return False
 
 
-def _upload_file(b: BrowserSession, data: bytes, file_name: str) -> str:
+UPLOAD_URL_HINT = re.compile(r"upload|import|transaction|excel|file", re.I)
+
+
+def _reply_text(resp) -> str:
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            for k in ("message", "msg", "error", "errorMessage", "status", "result"):
+                if isinstance(body.get(k), str) and body[k].strip():
+                    return body[k].strip()[:300]
+        return ""
+    except Exception:  # noqa: BLE001
+        try:
+            return re.sub(r"\s+", " ", resp.text())[:300]
+        except Exception:  # noqa: BLE001
+            return ""
+
+
+def _upload_file(b: BrowserSession, data: bytes, file_name: str, job_id: int | None = None) -> str:
+    """Upload the file; finished as soon as Finesse answers the upload request (its own
+    reply, not only a pop-up message). If Finesse gives no sign at all, carry on after
+    45s — finding the rows in Equity Staging is the real proof."""
     s = b.s
     b._goto(s.base_url + s.finesse_txn_upload_route, "Open Equity Transaction Upload")
     if not b._click_text("Excel Upload", wait_s=20):
@@ -399,13 +421,49 @@ def _upload_file(b: BrowserSession, data: bytes, file_name: str) -> str:
     inputs.first.set_input_files(files=[{"name": file_name, "buffer": data,
                                          "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}])
     b.page.wait_for_timeout(300)
-    if not _click_button(b, r"(^|\s)upload\s*$", learn_key="upload_button"):
-        raise b._report_error("'Upload' button not found on the Equity Transaction Upload page.")
-    msg = _wait_message(b, 120)
+
+    replies: list = []
+
+    def on_response(resp):
+        try:
+            req = resp.request
+            if req.method in ("POST", "PUT") and req.resource_type in ("xhr", "fetch"):
+                replies.append(resp)
+        except Exception:  # noqa: BLE001
+            pass
+
+    b.page.on("response", on_response)
+    try:
+        if not _click_button(b, r"(^|\s)upload\s*$", learn_key="upload_button"):
+            raise b._report_error("'Upload' button not found on the Equity Transaction Upload page.")
+        known = learned("upload_api")                  # the address Finesse answered on last time
+        t0 = time.time()
+        msg, last_note = "", 0.0
+        while time.time() - t0 < 45:
+            shown = [m for m in _messages(b)
+                     if re.search(r"success|upload|error|fail|invalid|posted|saved|done|complete", m, re.I)]
+            if shown:
+                msg = " | ".join(shown)
+                break
+            ours = [r for r in replies if (known and known in r.url) or UPLOAD_URL_HINT.search(r.url)] or replies
+            if ours:
+                r = ours[-1]
+                text = _reply_text(r)
+                if r.status >= 400 or re.search(r"\b(error|fail(ed)?|invalid)\b", text, re.I):
+                    raise b._report_error(f"Finesse rejected the upload (HTTP {r.status}): {text or 'no details'}")
+                learn("upload_api", re.sub(r"[?#].*$", "", r.url.split("//", 1)[-1].split("/", 1)[-1]))
+                msg = _wait_message(b, 2) or text or f"Finesse accepted the file (HTTP {r.status})"
+                break
+            if job_id and time.time() - last_note >= 5:
+                last_note = time.time()
+                _save(job_id, step=f"Uploading the file — waiting for Finesse ({time.time() - t0:.0f}s)")
+            b.page.wait_for_timeout(250)
+    finally:
+        b.page.remove_listener("response", on_response)
     if re.search(r"error|fail|invalid", msg, re.I) and not re.search(r"success", msg, re.I):
         raise b._report_error(f"Finesse rejected the upload: {msg}")
-    _close_dialog(b, ("OK", "Ok", "Close", "Done"), wait_s=1, learn_key="upload_dialog")
-    return msg or "Upload sent (Finesse showed no message)."
+    _close_dialog(b, ("OK", "Ok", "Close", "Done"), wait_s=0.5, learn_key="upload_dialog")
+    return msg or "Upload sent; Finesse showed no message — checking Equity Staging for the rows."
 
 
 def _table_sig(b: BrowserSession) -> str:
@@ -564,7 +622,7 @@ def _phase_upload(job_id: int, b: BrowserSession, data: bytes, file_name: str, r
     clock.lap("Staging checked before upload")
 
     _save(job_id, step="Uploading the file (Equity Uploads > Transactions Upload)")
-    result["upload_message"] = _upload_file(b, data, file_name)
+    result["upload_message"] = _upload_file(b, data, file_name, job_id)
     clock.lap("File uploaded")
 
     _save(job_id, step="Finding the uploaded rows in Equity Staging")
