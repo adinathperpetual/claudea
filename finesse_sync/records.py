@@ -39,6 +39,11 @@ class ClientRecord:
     trading_account: str = ""  # broker trading account, if Finesse shows one
 
 
+def split_accounts(value: str | None) -> list[str]:
+    """'HK1234, AB12' -> ['HK1234', 'AB12'] (a client can have several trading accounts)."""
+    return [a.strip().upper() for a in re.split(r"[,;]", value or "") if a.strip()]
+
+
 def split_name_account(name: str) -> tuple[str, str]:
     m = NAME_ACCT_RE.match(name or "")
     return (m.group(1).strip(), m.group(2).upper()) if m else ((name or "").strip(), "")

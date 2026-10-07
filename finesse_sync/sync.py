@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from . import db
@@ -30,7 +31,8 @@ def status() -> dict:
             "last_success_at": ok["ended_at"] if ok else None}
 
 
-def run_sync(trigger: str = "manual", fetcher: Callable[[], tuple[list[ClientRecord], str]] | None = None) -> dict:
+def run_sync(trigger: str = "manual", fetcher: Callable[[], tuple[list[ClientRecord], str]] | None = None,
+             account_lookup: Callable[[list[str]], dict[str, list[str]]] | None = None) -> dict:
     """Fetch from Finesse and upsert. Never raises for Finesse/data problems — the
     outcome (incl. errors) is written to sync_log and returned. Existing data is
     left untouched when the fetch fails, so the extractor keeps using the last sync."""
@@ -46,14 +48,22 @@ def run_sync(trigger: str = "manual", fetcher: Callable[[], tuple[list[ClientRec
         log_id = db.start_log(c, trigger)
     try:
         cipher = Cipher()
+        checked: set[str] = set()
         if fetcher is None:
             with FinesseClient(cipher=cipher) as fc:
                 records, method = fc.fetch_clients()
+                log.info("Fetched %d client rows from Finesse via %s", len(records), method)
+                if get_settings().profile_lookup:
+                    checked = _fill_missing_accounts(records, account_lookup or fc.lookup_trading_accounts, errors)
         else:
             records, method = fetcher()
+            if account_lookup:
+                checked = _fill_missing_accounts(records, account_lookup, errors)
         stats["fetched"] = len(records)
-        log.info("Fetched %d client rows from Finesse via %s", len(records), method)
         status_, message = _apply(records, cipher, stats, errors)
+        if checked:
+            with db.connect() as c:
+                db.mark_account_checked(c, sorted(checked), db.now_iso())
     except (FinesseError, LayoutChangedError, ConfigError) as e:
         for k in ("added", "updated", "unchanged", "flagged_missing", "reactivated"):
             stats[k] = 0                      # the transaction was rolled back
@@ -71,6 +81,51 @@ def run_sync(trigger: str = "manual", fetcher: Callable[[], tuple[list[ClientRec
         _run_lock.release()
     with db.connect() as c:
         return db.recent_logs(c, 1)[0]
+
+
+def _fill_missing_accounts(records: list[ClientRecord], lookup: Callable[[list[str]], dict[str, list[str]]],
+                           errors: list[str]) -> set[str]:
+    """For clients without a trading account in the list/report, read it from their
+    Finesse profile. Accounts found earlier are reused; profiles without one are
+    re-checked only every FINESSE_PROFILE_RECHECK_DAYS days. Never fails the sync."""
+    s = get_settings()
+    with db.connect() as c:
+        known = {r["trading_code"]: (r["trading_account"] or "", r["account_checked_at"])
+                 for r in c.execute("SELECT trading_code, trading_account, account_checked_at FROM clients")}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=s.profile_recheck_days)).isoformat()
+    todo = []
+    for r in records:
+        code = r.trading_code.strip().upper()
+        if r.trading_account or not code:
+            continue
+        acct, checked_at = known.get(code, ("", None))
+        if acct:
+            r.trading_account = acct                 # found on an earlier sync
+        elif not checked_at or checked_at < cutoff:
+            todo.append(code)
+    if not todo:
+        return set()
+    if len(todo) > s.profile_lookup_limit:
+        errors.append(f"{len(todo)} clients need a profile lookup for their trading account; "
+                      f"{s.profile_lookup_limit} done now, the rest on the next syncs")
+        todo = todo[:s.profile_lookup_limit]
+    log.info("Reading the trading account of %d client(s) from their Finesse profile…", len(todo))
+    try:
+        found = lookup(todo)
+    except Exception as e:  # noqa: BLE001
+        errors.append("Trading account lookup on client profiles failed: " + redact(f"{e}")[:300])
+        return set()
+    by_code = {r.trading_code.strip().upper(): r for r in records}
+    for code, accts in found.items():
+        if accts and code in by_code:
+            by_code[code].trading_account = ", ".join(accts)
+    none = [c for c in todo if c in found and not found[c]]
+    unread = [c for c in todo if c not in found]
+    log.info("Profiles read: %d, accounts found: %d, no account shown: %d, not reachable: %d",
+             len(found), sum(1 for a in found.values() if a), len(none), len(unread))
+    if unread:
+        errors.append(f"Could not open the profile of {len(unread)} client(s): {', '.join(unread[:20])}")
+    return set(found)
 
 
 def _apply(records: list[ClientRecord], cipher: Cipher, stats: dict, errors: list[str]) -> tuple[str, str]:
@@ -115,6 +170,8 @@ def _apply(records: list[ClientRecord], cipher: Cipher, stats: dict, errors: lis
                 stats["added"] += 1
                 continue
             old_pan = cipher.decrypt(old["pan_enc"]) if old["pan_enc"] else ""
+            if not r.trading_account and old["trading_account"]:
+                r = ClientRecord(r.trading_code, r.client_name, r.pan, old["trading_account"])
             if old["client_name"] != r.client_name or old_pan != r.pan or (old["trading_account"] or "") != r.trading_account:
                 db.update_client(c, code, r.client_name, cipher.encrypt(r.pan), valid, ts, r.trading_account)
                 stats["updated"] += 1

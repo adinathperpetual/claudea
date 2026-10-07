@@ -34,6 +34,7 @@ def fake(monkeypatch):
         monkeypatch.setenv("FINESSE_PASSWORD", PASSWORD)
         monkeypatch.setenv("FINESSE_PAN", PAN.lower())
         monkeypatch.setenv("FINESSE_REPORT_NAME", "")   # report flow only in its own test
+        monkeypatch.setenv("FINESSE_PROFILE_LOOKUP", "false")   # profile lookups only where tested
         if os.path.exists(LOCAL_CHROMIUM):
             monkeypatch.setenv("FINESSE_BROWSER_PATH", LOCAL_CHROMIUM)
         config.reset_settings()
@@ -108,6 +109,7 @@ def test_angular_material_grid_like_real_finesse(fake, monkeypatch):
 
     from .fake_finesse import MAT_CLIENTS
     monkeypatch.setenv("FINESSE_CLIENT_LIST_URL", "clients-material")
+    monkeypatch.setenv("FINESSE_PROFILE_LOOKUP", "true")
     config.reset_settings()
     r = run_sync("test")
     assert r["status"] == "success", r
@@ -115,7 +117,11 @@ def test_angular_material_grid_like_real_finesse(fake, monkeypatch):
     d = {x["trading_code"]: x for x in master.directory(include_inactive=True)}
     assert d["PCA00001"]["name"] == "Alpha Imports Pvt Ltd" and d["PCA00001"]["trading_account"] == "D000001"
     assert d["PCA00011"]["trading_account"] == "KJ26011"
-    assert "PCA00005" not in d                      # no trading account -> not offered for the A/c column
+    # no account in the grid -> read from the client's profile (Portfolios > Trading Account)
+    assert d["PCA00005"]["trading_account"] == "EV5005"
+    assert [x["trading_account"] for x in master.directory() if x["trading_code"] == "PCA00006"] == ["FS6006", "FS6007"]
+    assert "PCA00007" not in d                      # profile shows no account
+    assert sorted(fake.state["profile_visits"]) == ["PCA00005", "PCA00006", "PCA00007", "PCA00009"]
     c = Cipher()
     # badge text is not part of the name; PAN rule works by name, account or code
     assert master.resolve_passwords(c, file_name="CN_0710_Esha Verma.pdf")["passwords"] == ["AAAPV0005E"]
@@ -125,6 +131,12 @@ def test_angular_material_grid_like_real_finesse(fake, monkeypatch):
     added = master.add_exceptional(c, "dk7004", "deepa@123")
     assert added["trading_code"] == "PCA00004" and added["known_client"]
     assert master.resolve_passwords(c, file_name="x_Deepa Kulkarni.pdf")["passwords"] == ["deepa@123"]
+    assert master.resolve_passwords(c, trading_code="FS6007")["passwords"] == ["AAAPS0006F"]   # 2nd account
+    # next sync: accounts already known, the client without one is not re-checked this week
+    fake.state["profile_visits"].clear()
+    r = run_sync("test")
+    assert r["fetched"] == len(MAT_CLIENTS) and fake.state["profile_visits"] == []
+    assert {x["trading_code"]: x for x in master.directory()}["PCA00009"]["trading_account"] == "IJ9009"
 
 
 @pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")

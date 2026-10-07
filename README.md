@@ -93,6 +93,13 @@ If something isn't found, the error points to `data/finesse_report_page.txt` and
 They list the menus and options that were visible.
 If the report path fails, the tool falls back to reading the on-screen client table.
 
+**Trading account from the client profile.** Some clients have no trading account in the list or report.
+For them, the tool opens their Finesse profile (the name links to it) and reads every **Trading Account : …** under **Portfolios**.
+- A client with several portfolios keeps all their accounts.
+- Accounts found once are remembered and never looked up again.
+- Clients whose profile shows no account are re-checked at most once a week (`FINESSE_PROFILE_RECHECK_DAYS`).
+- At most `FINESSE_PROFILE_LOOKUP_LIMIT` profiles are read per sync; the rest follow on later syncs.
+
 ### Other fetch methods (optional)
 
 

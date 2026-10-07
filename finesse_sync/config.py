@@ -85,6 +85,10 @@ class Settings:
     finesse_report_name: str = field(default_factory=lambda: _env("FINESSE_REPORT_NAME", "Client Master Report"))
     finesse_report_button: str = field(default_factory=lambda: _env("FINESSE_REPORT_BUTTON", "Generate"))
     finesse_report_timeout: int = field(default_factory=lambda: _int("FINESSE_REPORT_TIMEOUT_SECONDS", 300))
+    # Trading account missing from the list/report -> read it from the client's profile page
+    profile_lookup: bool = field(default_factory=lambda: _bool("FINESSE_PROFILE_LOOKUP", True))
+    profile_lookup_limit: int = field(default_factory=lambda: _int("FINESSE_PROFILE_LOOKUP_LIMIT", 500))
+    profile_recheck_days: int = field(default_factory=lambda: _int("FINESSE_PROFILE_RECHECK_DAYS", 7))
     # 3) browser automation fallback
     finesse_client_list_url: str = field(default_factory=lambda: _env("FINESSE_CLIENT_LIST_URL"))
     finesse_menu_path: list[str] = field(default_factory=lambda: [p.strip() for p in _env("FINESSE_MENU_PATH", "Masters > Client Master").split(">") if p.strip()])

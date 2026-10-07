@@ -328,6 +328,15 @@ class FinesseClient:
     def _fetch_browser(self) -> list[ClientRecord]:
         return self._in_browser(lambda b: b.read_client_list())
 
+    def lookup_trading_accounts(self, codes: list[str]) -> dict[str, list[str]]:
+        found: dict[str, list[str]] = {}
+
+        def work(b: "BrowserSession"):
+            found.update(b.trading_accounts_from_profiles(codes))
+            return []
+        self._in_browser(work)
+        return found
+
     def _fetch_report(self) -> list[ClientRecord]:
         return self._in_browser(lambda b: b.download_client_master_report())
 
@@ -1111,12 +1120,14 @@ class BrowserSession:
         except Exception:  # noqa: BLE001
             return True
 
-    def read_client_list(self) -> list[ClientRecord]:
+    def _walk_pages(self, on_page: Callable[[list[str], list[list[str]]], bool]) -> None:
+        """Open the client grid and call ``on_page(head, rows)`` for every page (stop on True)."""
         self.open_client_list()
         self._wait_for_rows()
         self._maximize_page_size()
         head, rows = self._pick_table()
-        all_rows = list(rows)
+        if on_page(head, rows):
+            return
         prev = rows[:1]
         for _ in range(2000):
             nxt = self._next_button()
@@ -1137,5 +1148,79 @@ class BrowserSession:
             if not rows or rows[:1] == prev:
                 break
             prev = rows[:1]
+            if on_page(head, rows):
+                return
+
+    def read_client_list(self) -> list[ClientRecord]:
+        all_rows: list[list[str]] = []
+        head_box: list[list[str]] = []
+
+        def take(head, rows):
+            head_box[:] = [head]
             all_rows.extend(rows)
-        return from_dicts([dict(zip(head, r)) for r in all_rows])
+            self._note_profile_links()
+            return False
+
+        self._walk_pages(take)
+        return from_dicts([dict(zip(head_box[0], r)) for r in all_rows]) if head_box else []
+
+    # ---- trading account from the client's profile (Portfolios > "Trading Account : HK1234")
+    def _note_profile_links(self) -> None:
+        """Remember client code -> profile link for the rows on screen."""
+        if not hasattr(self, "profile_links"):
+            self.profile_links = {}
+        try:
+            pairs = self.page.evaluate("""() => [...document.querySelectorAll('tr, mat-row, [role=row]')].map(r => {
+                const a = r.querySelector('a[href*="profile"]');
+                const c = r.querySelector('.cdk-column-clientCode') || r.querySelector('td');
+                return a && c ? [c.innerText.replace(/\\s+/g, ' ').trim(), a.getAttribute('href')] : null; }).filter(Boolean)""")
+            for code, href in pairs:
+                if code and href:
+                    self.profile_links[code.upper()] = href
+        except Exception:  # noqa: BLE001
+            pass
+
+    def collect_profile_links(self, wanted: set[str]) -> dict[str, str]:
+        if not hasattr(self, "profile_links"):
+            self.profile_links = {}
+
+        def take(_head, _rows):
+            self._note_profile_links()
+            return wanted.issubset(self.profile_links)
+
+        if not wanted.issubset(self.profile_links):
+            self._walk_pages(take)
+        return {c: self.profile_links[c] for c in wanted if c in self.profile_links}
+
+    TRADING_ACCT_RE = re.compile(r"Trading\s*A(?:ccount|/c)\s*(?:No\.?|Number)?\s*:?\s*((?=[A-Za-z0-9\-/]*\d)[A-Za-z0-9][A-Za-z0-9\-/]{1,24})", re.I)
+
+    def trading_accounts_from_profiles(self, codes: list[str]) -> dict[str, list[str]]:
+        """Open each client's profile and read every 'Trading Account : X' under Portfolios.
+        Returns {code: [accounts]} for the profiles that were read ([] = none shown)."""
+        links = self.collect_profile_links(set(codes))
+        out: dict[str, list[str]] = {}
+        for code in codes:
+            href = links.get(code)
+            if not href:
+                continue
+            try:
+                self._goto(urljoin(self.s.base_url, href), "Open client profile")
+                text, deadline = "", time.time() + min(self.s.http_timeout, 25)
+                while time.time() < deadline:      # wait for THIS client's page, with its portfolios
+                    text = self.page.inner_text("body")
+                    if code in text.upper() and re.search(r"trading\s*a(ccount|/c)", text, re.I):
+                        break
+                    self.page.wait_for_timeout(500)
+                if code not in text.upper():
+                    continue
+                accts = []
+                for m in self.TRADING_ACCT_RE.finditer(text):
+                    a = m.group(1).upper()
+                    if a not in accts:
+                        accts.append(a)
+                out[code] = accts
+            except FinesseError:
+                raise
+            except Exception as e:  # noqa: BLE001 — one bad profile must not stop the rest
+                log.warning("Could not read the profile of %s: %s", code, type(e).__name__)
+        return out

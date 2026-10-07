@@ -15,7 +15,7 @@ import re
 
 from . import db
 from .names import best_matches, name_from_file
-from .records import ACCT_HDR, CODE_HDR, NAME_HDR, _clean
+from .records import ACCT_HDR, CODE_HDR, NAME_HDR, _clean, split_accounts
 from .security import Cipher, default_password, is_valid_pan, mask_pan, mask_secret
 
 PW_HDR = re.compile(r"(password|pass\s*word|\bpwd\b|\bpass\b|passcode|\bpin\b)", re.I)
@@ -65,8 +65,9 @@ def directory(include_inactive: bool = False) -> list[dict]:
     with db.connect() as c:
         q = ("SELECT trading_code, client_name, trading_account, active FROM clients WHERE trading_account != ''"
              + ("" if include_inactive else " AND active=1"))
-        return [{"trading_code": r["trading_code"], "trading_account": r["trading_account"], "name": r["client_name"],
-                 "active": bool(r["active"])} for r in c.execute(q + " ORDER BY client_name")]
+        return [{"trading_code": r["trading_code"], "trading_account": a, "name": r["client_name"],
+                 "active": bool(r["active"])}
+                for r in c.execute(q + " ORDER BY client_name") for a in split_accounts(r["trading_account"])]
 
 
 def counts() -> dict:
@@ -175,7 +176,7 @@ def resolve_passwords(cipher: Cipher, file_name: str = "", trading_code: str = "
         if not codes and file_name:
             tokens = {t.upper() for t in re.split(r"[^A-Za-z0-9]+", re.sub(r"\.[A-Za-z0-9]+$", "", file_name)) if t}
             hit = [code for code, cl in clients.items()
-                   if code in tokens or (cl["trading_account"] and cl["trading_account"].upper() in tokens)]
+                   if code in tokens or tokens.intersection(split_accounts(cl["trading_account"]))]
             if len(hit) == 1:
                 codes, how = hit, "code_in_file_name"
         if not codes:

@@ -12,6 +12,7 @@ sync_log              one row per sync run.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS clients (
     trading_code   TEXT PRIMARY KEY,
     client_name    TEXT NOT NULL,
     trading_account TEXT NOT NULL DEFAULT '',
+    account_checked_at TEXT,
     pan_enc        TEXT,
     pan_valid      INTEGER NOT NULL DEFAULT 0,
     active         INTEGER NOT NULL DEFAULT 1,
@@ -83,6 +85,8 @@ def init_db() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(clients)")}
         if "trading_account" not in cols:          # upgrade databases from the first version
             c.execute("ALTER TABLE clients ADD COLUMN trading_account TEXT NOT NULL DEFAULT ''")
+        if "account_checked_at" not in cols:       # when the profile was last read for an account
+            c.execute("ALTER TABLE clients ADD COLUMN account_checked_at TEXT")
         c.execute("CREATE INDEX IF NOT EXISTS ix_clients_acct ON clients(trading_account)")
 
 
@@ -131,8 +135,13 @@ def code_for(conn, value: str) -> str | None:
     r = conn.execute("SELECT trading_code FROM clients WHERE trading_code=?", (v,)).fetchone()
     if r:
         return r[0]
-    rows = conn.execute("SELECT trading_code FROM clients WHERE UPPER(trading_account)=?", (v,)).fetchall()
-    return rows[0][0] if len(rows) == 1 else None
+    hits = [r[0] for r in conn.execute("SELECT trading_code, trading_account FROM clients WHERE trading_account != ''")
+            if v in [a.strip().upper() for a in re.split(r"[,;]", r[1])]]
+    return hits[0] if len(hits) == 1 else None
+
+
+def mark_account_checked(conn, codes, ts) -> None:
+    conn.executemany("UPDATE clients SET account_checked_at=? WHERE trading_code=?", [(ts, c) for c in codes])
 
 
 def touch_client(conn, code, ts, reactivate: bool):

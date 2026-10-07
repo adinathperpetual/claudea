@@ -41,6 +41,14 @@ MAT_CLIENTS = [
     ("PCA00013", "Manoj Nair", "D000013", "", "AAAPN0013N"),
 ]
 
+# What each client's profile shows under Portfolios (grid rows without an account)
+PROFILE_ACCOUNTS = {"PCA00005": ["EV5005"], "PCA00006": ["FS6006", "FS6007"], "PCA00007": [], "PCA00009": ["IJ9009"]}
+
+PROFILE_PAGE = """<html><body><h2>__NAME__</h2><div>__CODE__</div><div id="p"></div><script>
+setTimeout(() => { document.getElementById('p').innerHTML = '<h3>Portfolios</h3>' + (__ACCTS__.length ? __ACCTS__ : [null])
+  .map((a, i) => `<div>Portfolio ${i + 1} <span>DP : -</span> <span>Trading Account : <b>${a || '-'}</b></span></div>`).join(''); }, 700);
+</script></body></html>"""
+
 MAT_PAGE = """<html><body><div class="app"><h1>Clients</h1>
 <table mat-table class="mat-mdc-table"><thead><tr mat-header-row class="mat-mdc-header-row">
 <th class="mat-mdc-header-cell cdk-column-clientCode">Code</th><th class="mat-mdc-header-cell cdk-column-clientName">Client</th>
@@ -54,7 +62,7 @@ const data = __DATA__; let size = 5, page = 0;
 function render(){
   const rows = data.slice(page*size, page*size+size).map(([code,name,acct,badge,pan]) =>
     `<tr role="row" mat-row class="mat-mdc-row"><td class="mat-mdc-cell cdk-column-clientCode"><div class="flex"><div><span class="dot-green"></span></div><div class="ml-2"> ${code} </div></div></td>`+
-    `<td class="mat-mdc-cell cdk-column-clientName"><a title="Click to go to Profile View" href="#/profile/x"> ${name} ${acct?`<span>(${acct})</span>`:''}<!----></a>${badge?`<span class="badge"> ${badge} </span>`:''}</td>`+
+    `<td class="mat-mdc-cell cdk-column-clientName"><a title="Click to go to Profile View" href="/finesse/profile/${code}"> ${name} ${acct?`<span>(${acct})</span>`:''}<!----></a>${badge?`<span class="badge"> ${badge} </span>`:''}</td>`+
     `<td class="mat-mdc-cell cdk-column-familyName"> ${name} - Family </td><td class="mat-mdc-cell cdk-column-clientPan"> ${pan} </td>`+
     `<td class="mat-mdc-cell cdk-column-actions"><button><span>visibility</span></button></td></tr>`).join('');
   // the real grid redraws a moment after the click (no page load)
@@ -280,6 +288,17 @@ def make_app(state: dict) -> FastAPI:
             return RedirectResponse("/finesse")
         import json
         return MAT_PAGE.replace("__DATA__", json.dumps(MAT_CLIENTS))
+
+    @app.get("/finesse/profile/{code}", response_class=HTMLResponse)
+    def profile(code: str, req: Request):
+        import json
+        if not ok(req):
+            return RedirectResponse("/finesse")
+        state.setdefault("profile_visits", []).append(code)
+        name = next((c[1] for c in MAT_CLIENTS if c[0] == code), "?")
+        accts = PROFILE_ACCOUNTS.get(code, [next((c[2] for c in MAT_CLIENTS if c[0] == code), "")])
+        return (PROFILE_PAGE.replace("__NAME__", name).replace("__CODE__", code)
+                .replace("__ACCTS__", json.dumps([a for a in accts if a])))
 
     @app.get("/finesse/api/clients")
     def api_clients(req: Request, page: int = 1, pageSize: int = 500):
