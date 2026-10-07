@@ -268,7 +268,7 @@ class FinesseClient:
         return r
 
     def _fetch_export(self) -> list[ClientRecord]:
-        url = urljoin(self.s.finesse_base_url + "/", self.s.finesse_export_url)
+        url = urljoin(self.s.base_url, self.s.finesse_export_url)
         r = self._request("GET", url)
         if r.status_code >= 400:
             raise FinesseError(f"Export download returned HTTP {r.status_code}")
@@ -276,7 +276,7 @@ class FinesseClient:
         return from_file_bytes(r.content, fname, r.headers.get("content-type", ""))
 
     def _fetch_api(self) -> list[ClientRecord]:
-        url = urljoin(self.s.finesse_base_url + "/", self.s.finesse_api_url)
+        url = urljoin(self.s.base_url, self.s.finesse_api_url)
         out: list[dict] = []
         page, size = self.s.finesse_api_first_page, self.s.finesse_api_page_size
         seen_first: str | None = None
@@ -535,7 +535,7 @@ class BrowserSession:
     def is_logged_in(self) -> bool:
         if not (self.initial and self.initial.cookies):
             return False
-        self._goto(urljoin(self.s.finesse_base_url + "/", self.s.finesse_client_list_url or ""), "Open Finesse")
+        self._goto(urljoin(self.s.base_url, self.s.finesse_client_list_url or ""), "Open Finesse")
         # a single-page app decides a moment later whether to show the login form
         for _ in range(10):
             if self.s.sel_logged_in and self._first_visible([self.s.sel_logged_in]) is not None:
@@ -552,6 +552,12 @@ class BrowserSession:
         """Open a page. Single-page apps may never go 'network idle' (polling), so only
         wait for the DOM, then give the network a short chance to settle."""
         with_retry(lambda: self.page.goto(url, wait_until="domcontentloaded"), label=label)
+        try:   # Finesse (Fuse template) shows a splash screen until the app has started
+            self.page.wait_for_function(
+                "() => !document.querySelector('fuse-splash-screen') || "
+                "document.body.classList.contains('fuse-splash-screen-hidden')", timeout=30000)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             self.page.wait_for_load_state("networkidle", timeout=15000)
         except Exception:  # noqa: BLE001
@@ -718,31 +724,115 @@ class BrowserSession:
             raise LoginError("Finesse login failed — still on the login page. Check the Finesse User ID, Password and PAN "
                              "(run SETUP.bat again to correct them).")
 
+    # ---- finding the client list page
+    COMMON_CLIENT_ROUTES = ("#/clients", "#/client", "#/client-list", "#/clients/list", "#/client-master",
+                            "#/masters/clients", "#/masters/client-master", "#/admin/clients", "#/backoffice/clients")
+
+    def _cache_file(self):
+        return self.s.data_dir / "client_list_url.txt"
+
+    def _has_client_table(self, wait_s: float = 12) -> bool:
+        deadline = time.time() + wait_s
+        while time.time() < deadline:
+            try:
+                self._pick_table()
+                return True
+            except LayoutChangedError:
+                pass
+            if self._password_visible():
+                return False
+            self.page.wait_for_timeout(500)
+        return False
+
+    def _try_menu_path(self) -> bool:
+        for item in self.s.finesse_menu_path:
+            loc = self.page.get_by_text(item, exact=True)
+            if loc.count() == 0:
+                loc = self.page.get_by_text(item)
+            target = next((loc.nth(i) for i in range(min(loc.count(), 10)) if loc.nth(i).is_visible()), None)
+            if target is None:
+                return False
+            target.click()
+            self.page.wait_for_timeout(800)
+        return self._has_client_table()
+
+    def _client_link_candidates(self) -> list[str]:
+        """Menu / page links that look like they lead to the client list, best first."""
+        links = self.page.evaluate("""() => [...document.querySelectorAll('a[href], [routerlink], [ng-reflect-router-link]')]
+            .map(a => ({text: (a.innerText || a.getAttribute('title') || '').replace(/\\s+/g, ' ').trim(),
+                        href: a.getAttribute('href') || a.getAttribute('routerlink') || a.getAttribute('ng-reflect-router-link') || ''}))""")
+        scored = []
+        for l in links:
+            href, text = l["href"].strip(), l["text"].lower()
+            if not href or href.startswith(("mailto:", "tel:", "javascript:")) or "/profile/" in href:
+                continue
+            if not re.search(r"client", text + " " + href, re.I):
+                continue
+            score = 0
+            if re.fullmatch(r"(all\s+)?clients?(\s+(list|master|management))?", text):
+                score += 10
+            if re.search(r"/clients?(/list)?/?$|client-?(list|master)", href, re.I):
+                score += 5
+            if re.search(r"report|ledger|holding|transaction|add|new|create|edit|login|history", text + href, re.I):
+                score -= 6
+            scored.append((score, href))
+        out = []
+        for _, h in sorted(scored, key=lambda x: -x[0]):
+            if h.startswith("/") and not h.startswith("#"):
+                h = urljoin(self.s.base_url, h)
+            elif not h.startswith(("http", "#")):
+                h = "#/" + h.lstrip("/")
+            if h not in out:
+                out.append(h)
+        return out
+
     def open_client_list(self) -> None:
+        """Open the page with the client table: the configured address, else the one found
+        last time, else the menu path, else search the menu links and common addresses."""
         s = self.s
         if s.finesse_client_list_url:
-            url = urljoin(s.finesse_base_url + "/", s.finesse_client_list_url)
+            self._goto(urljoin(s.base_url, s.finesse_client_list_url), "Open client list")
+            if self._password_visible() and not self.page.locator("table").count():
+                raise SessionExpired("Finesse showed the login page when opening the client list")
+            return
+        cache = self._cache_file()
+        tried: list[str] = []
+        if cache.exists():
+            url = cache.read_text(encoding="utf-8").strip()
+            if url:
+                self._goto(url, "Open client list")
+                if self._has_client_table():
+                    return
+                tried.append(url)
+        if self._try_menu_path():
+            self._remember(self.page.url)
+            return
+        candidates = self._client_link_candidates() + [r for r in self.COMMON_CLIENT_ROUTES]
+        for c in candidates:
+            url = urljoin(s.base_url, c)
+            if url in tried:
+                continue
+            tried.append(url)
+            log.info("Looking for the client list at %s", url)
             self._goto(url, "Open client list")
-        else:
-            for item in s.finesse_menu_path:
-                loc = self.page.get_by_text(item, exact=True)
-                if loc.count() == 0:
-                    loc = self.page.get_by_text(item)
-                target = None
-                for i in range(min(loc.count(), 10)):
-                    if loc.nth(i).is_visible():
-                        target = loc.nth(i)
-                        break
-                if target is None:
-                    raise LayoutChangedError(f"Finesse menu item {item!r} not found (FINESSE_MENU_PATH). "
-                                             "Set FINESSE_CLIENT_LIST_URL to the client list page URL instead.")
-                target.click()
-                try:
-                    self.page.wait_for_load_state("networkidle", timeout=s.http_timeout * 1000)
-                except Exception:  # noqa: BLE001
-                    pass
-        if self._password_visible() and not self.page.locator("table").count():
-            raise SessionExpired("Finesse showed the login page when opening the client list")
+            if self._has_client_table(wait_s=10):
+                self._remember(self.page.url)
+                return
+            if self._password_visible():
+                raise SessionExpired("Finesse showed the login page while looking for the client list")
+        found = ", ".join(c for c in candidates[:8]) or "none"
+        raise LayoutChangedError(
+            "Could not find the Finesse client list page automatically (client links tried: " + found + "). "
+            "Open the client list in Finesse, copy the address from the browser's address bar and put it in .env as "
+            "FINESSE_CLIENT_LIST_URL=<address>.")
+
+    def _remember(self, url: str) -> None:
+        try:
+            self._cache_file().parent.mkdir(parents=True, exist_ok=True)
+            self._cache_file().write_text(url, encoding="utf-8")
+            log.info("Client list found at %s (remembered for next time)", url)
+        except OSError:
+            pass
 
     def _maximize_page_size(self) -> None:
         """Pick the largest 'rows per page' option if the grid has one."""

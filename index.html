@@ -3410,7 +3410,7 @@ const fsWhen = iso => iso ? new Date(iso).toLocaleString() : "never";
 function fsRenderStatus(st){
   const c = st.counts || {}, last = st.last_run;
   if (st.running) fsSetStatus("busy", "Syncing from Finesse…");
-  else if (last && last.status === "failed") fsSetStatus("bad", `Last sync failed (${fsWhen(last.ended_at)}) — using data from ${fsWhen(st.last_success_at)}`);
+  else if (last && last.status === "failed") fsSetStatus("bad", `Last sync failed (${fsWhen(last.ended_at)}) — ` + (st.last_success_at ? `using data from ${fsWhen(st.last_success_at)}` : "no successful sync yet"));
   else fsSetStatus("ok", `Connected · last synced ${fsWhen(st.last_success_at)}`);
   $("#fsSync").disabled = !!st.running;
   $("#fsSync").textContent = st.running ? "Syncing…" : "⟳ Sync from Finesse";

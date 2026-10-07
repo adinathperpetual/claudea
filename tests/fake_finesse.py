@@ -94,6 +94,31 @@ setTimeout(landing, 1000);
 </script></body></html>"""
 
 
+# Shell like Finesse's index.html (Fuse template): <base href="./">, a splash screen, and
+# the sign-in form drawn later by main.js. Opened without the trailing "/", main.js is
+# looked up one folder too high and the page stays blank.
+FUSE_SHELL = """<!doctype html><html><head><base href="./"></head><body>
+<fuse-splash-screen style="position:fixed;inset:0;pointer-events:none">Loading</fuse-splash-screen>
+<app-root></app-root><script src="main.js" type="module"></script></body></html>"""
+
+FUSE_MAIN = """
+const root = document.querySelector('app-root');
+setTimeout(() => {
+  root.innerHTML = `<form id="f"><mat-form-field><mat-label>User ID</mat-label><input id="userId" formcontrolname="userId" matinput></mat-form-field>
+    <mat-form-field><mat-label>Password</mat-label><input id="password" type="password" formcontrolname="password"></mat-form-field>
+    <mat-form-field><mat-label>PAN</mat-label><input id="pan" formcontrolname="pan"></mat-form-field>
+    <label><input type="checkbox"> Remember me</label><button type="submit">Sign in</button><div class="error" id="err"></div></form>`;
+  document.body.classList.add('fuse-splash-screen-hidden');
+  document.querySelector('fuse-splash-screen').remove();
+  document.getElementById('f').onsubmit = async (e) => { e.preventDefault();
+    const r = await fetch('api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({userId: userId.value, password: password.value, pan: pan.value})});
+    if (r.ok) { location.hash = '#/dashboard'; root.innerHTML = '<h1>Dashboard</h1>'; }
+    else document.getElementById('err').textContent = 'Wrong user id or password'; };
+}, 1500);
+"""
+
+
 def make_app(state: dict) -> FastAPI:
     app = FastAPI()
     sessions: set[str] = set()
@@ -141,6 +166,22 @@ def make_app(state: dict) -> FastAPI:
     @app.get("/finesse/spa", response_class=HTMLResponse)
     def spa_login():
         return SPA_LOGIN
+
+    @app.get("/finesse/fuse", response_class=HTMLResponse)   # no redirect to "/fuse/"
+    def fuse_no_slash():
+        return FUSE_SHELL
+
+    @app.get("/finesse/fuse/", response_class=HTMLResponse)
+    def fuse_shell():
+        return FUSE_SHELL
+
+    @app.get("/finesse/fuse/main.js")
+    def fuse_main():
+        return PlainTextResponse(FUSE_MAIN, media_type="text/javascript")
+
+    @app.post("/finesse/fuse/api/login")
+    async def fuse_login(req: Request):
+        return await api_login(req)
 
     @app.get("/finesse/blank", response_class=HTMLResponse)
     def blank():

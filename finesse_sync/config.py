@@ -17,6 +17,16 @@ ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
 
+def _folder(url: str) -> str:
+    """Add the trailing "/" to an app folder URL (not to a file, a query or a #route)."""
+    from urllib.parse import urlsplit
+    u = url.strip()
+    if not u or "#" in u or "?" in u or u.endswith("/"):
+        return u
+    last = urlsplit(u).path.rsplit("/", 1)[-1]
+    return u if "." in last else u + "/"
+
+
 class ConfigError(RuntimeError):
     """A required setting is missing or invalid."""
 
@@ -50,7 +60,7 @@ class Settings:
     finesse_pan: str = field(default_factory=lambda: _env("FINESSE_PAN").upper())
 
     # --- Finesse URLs ---
-    finesse_base_url: str = field(default_factory=lambda: _env("FINESSE_BASE_URL", "https://app.perpetualinv.com/finesse"))
+    finesse_base_url: str = field(default_factory=lambda: _env("FINESSE_BASE_URL", "https://app.perpetualinv.com/finesse/"))
     finesse_login_url: str = field(default_factory=lambda: _env("FINESSE_LOGIN_URL"))
     # Fetch method: auto | export | api | playwright
     finesse_fetch_method: str = field(default_factory=lambda: _env("FINESSE_FETCH_METHOD", "auto").lower())
@@ -116,8 +126,14 @@ class Settings:
     cors_origins: list[str] = field(default_factory=lambda: _list("CNE_CORS_ORIGINS", "null,http://127.0.0.1:8765,http://localhost:8765"))
 
     @property
+    def base_url(self) -> str:
+        """Finesse's app folder, always ending in "/". The page uses <base href="./">, so
+        ".../finesse" (no slash) would load its scripts from the wrong folder and stay blank."""
+        return _folder(self.finesse_base_url)
+
+    @property
     def login_url(self) -> str:
-        return self.finesse_login_url or self.finesse_base_url
+        return _folder(self.finesse_login_url) if self.finesse_login_url else self.base_url
 
     def secrets(self) -> list[str]:
         """Values that must never appear in logs or error messages."""

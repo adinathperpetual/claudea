@@ -149,3 +149,38 @@ def test_login_layout_error_saves_details(fake, monkeypatch, tmp_path):
     assert "finesse_login_page.txt" in str(e.value)
     txt = (tmp_path / "finesse_login_page.txt").read_text()
     assert PASSWORD not in txt and (tmp_path / "finesse_login_page.png").exists()
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_fuse_shell_without_trailing_slash(fake, monkeypatch):
+    """Finesse's real page: <base href="./"> + splash screen + form drawn by main.js.
+    The configured address has no trailing "/" and the server does not add one."""
+    monkeypatch.setenv("FINESSE_LOGIN_URL", fake.url + "/fuse")
+    config.reset_settings()
+    FinesseClient().login()
+    assert fake.state["logins"] == 1
+
+
+def test_folder_urls_get_trailing_slash(monkeypatch):
+    monkeypatch.setenv("FINESSE_BASE_URL", "https://app.example.com/finesse")
+    config.reset_settings()
+    s = config.get_settings()
+    assert s.base_url == "https://app.example.com/finesse/" and s.login_url == s.base_url
+    from urllib.parse import urljoin
+    assert urljoin(s.base_url, "#/clients") == "https://app.example.com/finesse/#/clients"
+    for keep in ("https://x.com/finesse/#/sign-in", "https://x.com/app/index.html", "https://x.com/a/"):
+        assert config._folder(keep) == keep
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_client_list_found_without_menu_path_and_remembered(fake, monkeypatch, tmp_path):
+    """No FINESSE_CLIENT_LIST_URL and a menu path that does not exist (the real error):
+    the tool finds the client list from the menu links and remembers the address."""
+    monkeypatch.setenv("FINESSE_MENU_PATH", "Masters > Client Master Register")
+    config.reset_settings()
+    r = run_sync("test")
+    assert r["status"] == "partial" and r["fetched"] == len(CLIENTS), r
+    cached = (tmp_path / "client_list_url.txt").read_text()
+    assert cached.endswith("/finesse/clients")
+    r = run_sync("test")                                   # second run goes straight there
+    assert r["fetched"] == len(CLIENTS)
