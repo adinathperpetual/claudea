@@ -28,7 +28,7 @@ from .security import Cipher
 log = logging.getLogger("finesse_sync.finesse")
 T = TypeVar("T")
 
-USER_HINT = re.compile(r"(user|login|client.?id|email|uid|username|userid)", re.I)
+USER_HINT = re.compile(r"(user|login|client.?id|email|uid|username|userid|mobile|employee|emp.?code|\bid\b)", re.I)
 PAN_HINT = re.compile(r"\bpan\b|pan.?(no|number|card)?$|^pan", re.I)
 SUBMIT_TEXT = re.compile(r"^\s*(log\s*-?\s*in|sign\s*-?\s*in|submit|continue|proceed|next|verify)\s*$", re.I)
 ERROR_TEXT = re.compile(r"(invalid|incorrect|wrong|failed|locked|not\s+match|unauthori[sz]ed|blocked|expired)", re.I)
@@ -535,58 +535,194 @@ class BrowserSession:
     def is_logged_in(self) -> bool:
         if not (self.initial and self.initial.cookies):
             return False
-        try:
-            with_retry(lambda: self.page.goto(self.s.finesse_client_list_url or self.s.finesse_base_url,
-                                              wait_until="networkidle"), label="Open Finesse")
-        except FinesseError:
-            raise
-        if self.s.sel_logged_in:
-            return self._first_visible([self.s.sel_logged_in]) is not None
+        self._goto(urljoin(self.s.finesse_base_url + "/", self.s.finesse_client_list_url or ""), "Open Finesse")
+        # a single-page app decides a moment later whether to show the login form
+        for _ in range(10):
+            if self.s.sel_logged_in and self._first_visible([self.s.sel_logged_in]) is not None:
+                return True
+            if self._password_visible():
+                return False
+            if self.page.locator("tr.mat-mdc-row, tr.mat-row, table tbody tr").count():
+                return True
+            self.page.wait_for_timeout(500)
         return not self._password_visible()
+
+    # ---- login (browser)
+    def _goto(self, url: str, label: str) -> None:
+        """Open a page. Single-page apps may never go 'network idle' (polling), so only
+        wait for the DOM, then give the network a short chance to settle."""
+        with_retry(lambda: self.page.goto(url, wait_until="domcontentloaded"), label=label)
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _visible_inputs(self) -> list[dict]:
+        """Visible fillable inputs in page order, each with the words that describe it."""
+        out = []
+        inputs = self.page.locator("input, textarea")
+        for i in range(min(inputs.count(), 60)):
+            el = inputs.nth(i)
+            try:
+                if not el.is_visible() or el.is_disabled():
+                    continue
+                typ = (el.get_attribute("type") or "text").lower()
+                if typ in ("hidden", "checkbox", "radio", "submit", "button", "file", "image", "reset"):
+                    continue
+                attrs = {a: el.get_attribute(a) or "" for a in
+                         ("name", "id", "placeholder", "aria-label", "formcontrolname", "autocomplete", "maxlength", "class")}
+                label = ""
+                if attrs["id"]:
+                    lab = self.page.locator(f'label[for="{attrs["id"]}"]')
+                    if lab.count():
+                        label = lab.first.inner_text()
+                if not label:   # Material / custom forms: the label text sits in the field wrapper
+                    label = el.evaluate("""e => { const f = e.closest('mat-form-field, .mat-mdc-form-field, .form-group, .field, label, div');
+                                                  const l = f && f.querySelector('mat-label, label, .label');
+                                                  return l ? l.innerText : ''; }""") or ""
+                words = " ".join([attrs["name"], attrs["id"], attrs["placeholder"], attrs["aria-label"],
+                                  attrs["formcontrolname"], attrs["autocomplete"], label])
+                out.append({"el": el, "type": typ, "words": words, "attrs": attrs, "label": label.strip()})
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
+    def _classify(self, fields: list[dict], filled: set[str]) -> dict:
+        """Decide which visible box is user id / password / PAN."""
+        s = self.s
+        roles: dict = {}
+        for role, sel in (("user", s.sel_user), ("password", s.sel_password), ("pan", s.sel_pan)):
+            if sel:
+                el = self._first_visible([sel])
+                if el is not None:
+                    roles[role] = el
+        rest = []
+        for f in fields:
+            if f["type"] == "password":
+                roles.setdefault("password", f["el"])
+            elif PAN_HINT.search(f["words"]):
+                roles.setdefault("pan", f["el"])
+            elif USER_HINT.search(f["words"]):
+                roles.setdefault("user", f["el"])
+            else:
+                rest.append(f)
+        # Unlabelled boxes: the first is the user id (if not done yet), the next one the PAN.
+        for f in rest:
+            if "user" not in roles and "user" not in filled:
+                roles["user"] = f["el"]
+            elif "pan" not in roles and "pan" not in filled:
+                roles["pan"] = f["el"]
+        return roles
+
+    def _open_login_form(self) -> list[dict]:
+        """Wait for the login form; if the page is a landing page, click its Login button."""
+        deadline = time.time() + self.s.http_timeout
+        clicked = False
+        while time.time() < deadline:
+            fields = self._visible_inputs()
+            if fields:
+                return fields
+            if not clicked and time.time() > deadline - self.s.http_timeout / 2:
+                for b in self.page.get_by_role("button").all()[:20] + self.page.get_by_role("link").all()[:30]:
+                    try:
+                        if b.is_visible() and re.match(r"^\s*(log\s*-?\s*in|sign\s*-?\s*in|client\s*login)\s*$",
+                                                       b.inner_text() or "", re.I):
+                            b.click()
+                            clicked = True
+                            break
+                    except Exception:  # noqa: BLE001
+                        continue
+            self.page.wait_for_timeout(500)
+        return []
+
+    def _save_login_debug(self, note: str) -> str:
+        """Write what the login page looked like (no typed values) for support."""
+        try:
+            d = self.s.data_dir
+            d.mkdir(parents=True, exist_ok=True)
+            lines = [f"Finesse login page — {note}", f"URL: {self.page.url}",
+                     f"Frames: {len(self.page.frames)}", "", "Visible input boxes (in page order):"]
+            for i, f in enumerate(self._visible_inputs(), 1):
+                a = f["attrs"]
+                lines.append(f"  {i}. type={f['type']} id={a['id']!r} name={a['name']!r} placeholder={a['placeholder']!r} "
+                             f"aria-label={a['aria-label']!r} formcontrolname={a['formcontrolname']!r} label={f['label']!r}")
+            btns = []
+            for b in self.page.locator("button, input[type=submit], a").all()[:40]:
+                try:
+                    if b.is_visible():
+                        t = (b.inner_text() or b.get_attribute("value") or "").strip()
+                        if t:
+                            btns.append(t[:40])
+                except Exception:  # noqa: BLE001
+                    pass
+            lines += ["", "Visible buttons / links: " + " | ".join(btns[:30])]
+            for fr in self.page.frames[1:]:
+                lines.append(f"Inner frame: {fr.url}")
+            path = d / "finesse_login_page.txt"
+            path.write_text(redact("\n".join(lines)), encoding="utf-8")
+            try:
+                for f in self._visible_inputs():
+                    if f["type"] != "password":
+                        f["el"].fill("")          # never put typed ids / PAN in the screenshot
+            except Exception:  # noqa: BLE001
+                pass
+            self.page.screenshot(path=str(d / "finesse_login_page.png"), full_page=True)
+            return str(path)
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _layout_error(self, what: str) -> LoginError:
+        path = self._save_login_debug(what)
+        hint = (f" Details saved to {path} (and a screenshot next to it) — send that file to support."
+                if path else "")
+        return LoginError(f"Finesse login page layout changed: {what}.{hint}")
 
     def login(self) -> None:
         s = self.s
-        with_retry(lambda: self.page.goto(s.login_url, wait_until="networkidle"), label="Open Finesse login page")
-        user = self._first_visible([s.sel_user]) if s.sel_user else self._input_matching(USER_HINT)
-        pw = self._first_visible([s.sel_password or "input[type=password]"])
-        if user is None or pw is None:
-            raise LoginError("Finesse login page layout changed: could not find the "
-                             + ("user id" if user is None else "password") + " field. "
-                             "Set FINESSE_SEL_USER / FINESSE_SEL_PASSWORD in .env (run `python -m finesse_sync discover` to inspect).")
-        pan = self._first_visible([s.sel_pan]) if s.sel_pan else self._input_matching(PAN_HINT)
-        if pan is not None:
-            try:
-                if pan.evaluate("(e, other) => e === other", user.element_handle()):
-                    pan = None          # the "user" heuristic and the PAN heuristic hit the same box
-            except Exception:  # noqa: BLE001
-                pass
-        user.fill(s.finesse_user_id)
-        pw.fill(s.finesse_password)
-        if pan is not None:
-            pan.fill(s.finesse_pan)
-        self._submit()
-
-        # Two-step login: PAN asked on a second screen.
-        if pan is None:
-            pan2 = self._first_visible([s.sel_pan]) if s.sel_pan else self._input_matching(PAN_HINT)
-            if pan2 is not None:
-                pan2.fill(s.finesse_pan)
-                self._submit()
-
+        self._goto(s.login_url, "Open Finesse login page")
+        if not self._open_login_form():
+            raise self._layout_error("no input boxes appeared on the login page")
+        values = {"user": s.finesse_user_id, "password": s.finesse_password, "pan": s.finesse_pan}
+        filled: set[str] = set()
+        # Fill whatever the current screen asks for, submit, repeat (User ID / Password / PAN
+        # may be on one screen or spread over two or three).
+        for _ in range(4):
+            roles = self._classify(self._visible_inputs(), filled)
+            todo = {k: v for k, v in roles.items() if k not in filled}
+            if not todo:
+                break
+            for role, el in todo.items():
+                el.fill(values[role])
+                filled.add(role)
+            self._submit()
+            err = self._visible_error()
+            if err:
+                raise LoginError(f"Finesse rejected the login: {err}")
+            # give the next screen (or the app) time to appear
+            deadline = time.time() + min(s.http_timeout, 20)
+            while time.time() < deadline:
+                self.page.wait_for_timeout(500)
+                if self._visible_error() or not self._visible_inputs():
+                    break
+                if {k for k in self._classify(self._visible_inputs(), filled)} - filled:
+                    break
         err = self._visible_error()
         if err:
             raise LoginError(f"Finesse rejected the login: {err}")
+        if "user" not in filled or "password" not in filled:
+            raise self._layout_error("could not find the " + ("user id" if "user" not in filled else "password") + " box")
         if s.sel_logged_in:
             if self._first_visible([s.sel_logged_in]) is None:
                 raise LoginError("Finesse login did not complete (logged-in marker FINESSE_SEL_LOGGED_IN not found).")
         elif self._password_visible():
-            raise LoginError("Finesse login failed — still on the login page. Check FINESSE_USER_ID, FINESSE_PASSWORD and FINESSE_PAN.")
+            raise LoginError("Finesse login failed — still on the login page. Check the Finesse User ID, Password and PAN "
+                             "(run SETUP.bat again to correct them).")
 
     def open_client_list(self) -> None:
         s = self.s
         if s.finesse_client_list_url:
             url = urljoin(s.finesse_base_url + "/", s.finesse_client_list_url)
-            with_retry(lambda: self.page.goto(url, wait_until="networkidle"), label="Open client list")
+            self._goto(url, "Open client list")
         else:
             for item in s.finesse_menu_path:
                 loc = self.page.get_by_text(item, exact=True)

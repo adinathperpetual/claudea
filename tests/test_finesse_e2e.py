@@ -124,3 +124,28 @@ def test_angular_material_grid_like_real_finesse(fake, monkeypatch):
     added = master.add_exceptional(c, "dk7004", "deepa@123")
     assert added["trading_code"] == "PCA00004" and added["known_client"]
     assert master.resolve_passwords(c, file_name="x_Deepa Kulkarni.pdf")["passwords"] == ["deepa@123"]
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_spa_multi_step_login(fake, monkeypatch):
+    monkeypatch.setenv("FINESSE_LOGIN_URL", fake.url + "/spa")
+    config.reset_settings()
+    FinesseClient().login()
+    assert fake.state["logins"] == 1
+    monkeypatch.setenv("FINESSE_PAN", "ZZZZZ9999Z")
+    config.reset_settings()
+    with pytest.raises(LoginError) as e:
+        FinesseClient().login()
+    assert "Invalid credentials" in str(e.value)
+
+
+@pytest.mark.skipif(not pw_available, reason="Chromium for Playwright not installed")
+def test_login_layout_error_saves_details(fake, monkeypatch, tmp_path):
+    monkeypatch.setenv("FINESSE_LOGIN_URL", fake.url + "/blank")
+    monkeypatch.setenv("FINESSE_TIMEOUT_SECONDS", "4")
+    config.reset_settings()
+    with pytest.raises(LoginError) as e:
+        FinesseClient().login()
+    assert "finesse_login_page.txt" in str(e.value)
+    txt = (tmp_path / "finesse_login_page.txt").read_text()
+    assert PASSWORD not in txt and (tmp_path / "finesse_login_page.png").exists()

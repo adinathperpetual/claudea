@@ -72,6 +72,28 @@ setTimeout(render, 600);   // async first draw, like Angular
 </script></body></html>"""
 
 
+# Angular-style login: landing page -> (late) form with an unlabelled id box + password
+# -> second screen asking for PAN (worded without "PAN") -> JSON login call.
+SPA_LOGIN = """<html><body><div id="app"></div><script>
+const app = document.getElementById('app'); let uid = '', pwd = '';
+const field = (label, id, type) => `<mat-form-field class="mat-mdc-form-field"><mat-label>${label}</mat-label>`+
+  `<input id="${id}" type="${type}" class="mat-mdc-input-element"></mat-form-field>`;
+function landing(){ app.innerHTML = '<h1>Welcome to Finesse</h1><button id="go">Login</button>';
+  document.getElementById('go').onclick = () => setTimeout(step1, 700); }
+function step1(){ app.innerHTML = field('Your code', 'mat-input-0', 'text') + field('Secret', 'mat-input-1', 'password') +
+  '<button type="button" id="next">Next</button>';
+  document.getElementById('next').onclick = () => { uid = document.getElementById('mat-input-0').value;
+    pwd = document.getElementById('mat-input-1').value; setTimeout(step2, 500); }; }
+function step2(){ app.innerHTML = field('Permanent Account No.', 'mat-input-2', 'text') +
+  '<button type="button" id="verify">Verify</button><div class="error" id="err"></div>';
+  document.getElementById('verify').onclick = async () => {
+    const r = await fetch('/finesse/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({userId: uid, password: pwd, pan: document.getElementById('mat-input-2').value})});
+    if (r.ok) location.href = '/finesse/home'; else document.getElementById('err').textContent = 'Invalid credentials'; }; }
+setTimeout(landing, 1000);
+</script></body></html>"""
+
+
 def make_app(state: dict) -> FastAPI:
     app = FastAPI()
     sessions: set[str] = set()
@@ -115,6 +137,14 @@ def make_app(state: dict) -> FastAPI:
         r = JSONResponse({"success": True})
         r.set_cookie("FSID", sid)
         return r
+
+    @app.get("/finesse/spa", response_class=HTMLResponse)
+    def spa_login():
+        return SPA_LOGIN
+
+    @app.get("/finesse/blank", response_class=HTMLResponse)
+    def blank():
+        return "<html><body><p>Maintenance</p></body></html>"
 
     @app.get("/finesse/home", response_class=HTMLResponse)
     def home(req: Request):
