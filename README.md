@@ -157,19 +157,27 @@ If you would rather schedule `python -m finesse_sync sync` yourself, set `SYNC_S
 ## Upload to Finesse (with confirmation)
 
 After extraction, click **Upload to Finesse** (next to *Download filled template*). An admin must be connected in card 2.
-1. The tool builds the same file as *Download filled template*. Rows without a trading account are left out.
-2. It sends the file to the service, which logs in to Finesse.
-3. It uploads the file: **File Upload › Equity Uploads › Transactions Upload › Excel Upload › Upload**.
-4. It opens **Equity › Equity Staging**, searches each trading account in the file, and finds the rows this upload created.
-   It matches on trade date, purchase/sell, quantity and rate.
-5. A window lists, per account, the rows it will post. It also lists:
-   - unmapped rows (scrip or client not mapped in Finesse);
-   - rows that were already in staging before the upload (possible duplicate upload);
-   - rows not found after the upload.
 
-   None of these are posted.
-6. **Confirm & Post**: the tool ticks only the listed rows (checking the number ticked), clicks **Post**, confirms, and checks they left staging.
-   **Don't post** leaves the uploaded rows in Equity Staging.
+1. **Choose what to upload.** A window lists the extracted transactions per trading account, all ticked.
+   Untick anything you don't want uploaded, then click **Upload N selected**.
+   Rows without a trading account are left out.
+2. The service logs in to Finesse and uploads the file: **File Upload › Equity Uploads › Transactions Upload › Excel Upload › Upload**.
+3. It searches each trading account in **Equity Staging** and finds the rows the upload created.
+   It matches on trade date, purchase/sell, quantity and rate.
+4. **Choose what to post.** Every row is shown with its status and a tick box:
+   - **new**: ticked;
+   - **already in staging before this upload**: unticked (possible duplicate upload), but you may tick it;
+   - **unmapped** or **not found**: can't be ticked.
+5. **Confirm & Post N selected**: only the ticked rows are ticked in Finesse (the number ticked is checked) and posted.
+   The tool then checks they left staging. **Don't post** leaves the uploaded rows in Equity Staging.
+
+**Faster with auto-learn.**
+- What worked last time is saved in `data/finesse_learned.json` and tried first next time: the search box, the Search / Upload / Post buttons, and the confirm-dialog button.
+- If something has changed in Finesse, it is simply found again and the file updated.
+- The tool waits for the staging grid to actually change instead of fixed pauses.
+- It skips the Mapped/Unmapped tabs when Finesse shows 0 unmapped.
+- The logged-in browser stays open on Equity Staging for up to 20 minutes while you review, so posting doesn't log in or search from scratch again.
+- The window shows how long each part took.
 
 On any layout problem the job stops without posting. It saves `data/finesse_report_page.txt` and a screenshot.
 Page addresses are set in `.env`: `FINESSE_TXN_UPLOAD_ROUTE` and `FINESSE_STAGING_ROUTE`.

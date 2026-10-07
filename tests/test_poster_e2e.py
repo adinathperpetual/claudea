@@ -73,18 +73,43 @@ def test_upload_then_confirm_posts_only_the_new_mapped_rows(fake):
     job_id = poster.start(data, "Template-filled.xlsx", "tester")
     j = wait(job_id, "awaiting_confirmation", "failed")
     assert j["status"] == "awaiting_confirmation", j["message"]
-    plan = j["data"]["accounts"]["AC9001"]
-    assert [(r["side"], r["qty"], r["rate"]) for r in plan["to_post"]] == [("PURCHASE", 10, 101.5)]
-    assert len(plan["unmapped"]) == 1 and UNKNOWN_ISIN in plan["unmapped"][0]
-    assert len(plan["already_in_staging"]) == 1 and "SELL 5" in plan["already_in_staging"][0]
+    cands = {c["label"].split(" ")[1] + c["label"].split(" ")[2]: c for c in j["data"]["accounts"]["AC9001"]["candidates"]}
+    assert {k: c["kind"] for k, c in cands.items()} == {"PURCHASE10": "new", "SELL5": "duplicate", "PURCHASE3": "unmapped"}
     assert st["uploads"] == 1 and st["posted"] == []                  # nothing posted before confirmation
+    assert j["data"]["timings"]["upload_total"] > 0
 
-    poster.confirm(job_id)
+    with pytest.raises(poster.PostError):                             # unmapped rows can't be chosen
+        poster.confirm(job_id, [cands["PURCHASE3"]["id"]])
+    poster.confirm(job_id)                                            # default: the new rows only
     j = wait(job_id, "posted", "partial", "failed")
-    assert j["status"] == "posted", j
+    assert j["status"] == "posted", j["message"]
     assert [r["id"] for r in st["posted"]] == [1000]                  # exactly the new mapped row
     left = {r["id"] for r in st["staging"]}
     assert {900, 901, 902, 1001, 1002} <= left                        # old, duplicate, other account, unmapped
+    learned = poster.learned("staging_box"), poster.learned("post_confirm")
+    assert learned == ("#acct", "Yes")                                # remembered for next time
+
+
+def test_person_chooses_rows_to_post(fake):
+    """Tick a row that was already in staging, untick a new one."""
+    st = fake.state
+    st["staging"] += [{"id": 901, "account": "AC9001", "client": "Adinath Chavhan", "code": "PCA00333",
+                       "scrip": "x", "date": "09-10-2026", "type": "SELL", "qty": 5, "rate": 20, "mapped": True}]
+    st["next_id"] = 1000
+    data = template([("AC9001", "Adinath Chavhan", "2026-10-09", "INE111A01011", "PURCHASE", 1, 10),   # new, unticked
+                     ("AC9001", "Adinath Chavhan", "2026-10-09", "INE222B01022", "SELL", 5, 20),       # dup, ticked
+                     ("AC9001", "Adinath Chavhan", "2026-10-09", "INE333C01033", "PURCHASE", 2, 30)])  # new, ticked
+    job_id = poster.start(data, "t.xlsx")
+    j = wait(job_id, "awaiting_confirmation")
+    c = j["data"]["accounts"]["AC9001"]["candidates"]
+    assert [x["kind"] for x in c] == ["new", "duplicate", "new"]
+    poster.confirm(job_id, [c[1]["id"], c[2]["id"]])
+    j = wait(job_id, "posted", "partial", "failed")
+    assert j["status"] == "posted", j["message"]
+    posted = sorted((r["type"], r["qty"]) for r in st["posted"])
+    assert posted == [("PURCHASE", 2), ("SELL", 5)]                   # one SELL 5 (old or new — identical)
+    assert sum(1 for r in st["staging"] if r["type"] == "SELL" and r["qty"] == 5) == 1
+    assert any(r["type"] == "PURCHASE" and r["qty"] == 1 for r in st["staging"])   # unticked: not posted
 
 
 def test_cancel_posts_nothing(fake):

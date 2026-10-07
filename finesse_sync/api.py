@@ -281,10 +281,14 @@ def transaction_job(job_id: int, _role: Role = Depends(admin_only)):
     return job
 
 
+class ConfirmIn(BaseModel):
+    selected: list[str] | None = None      # candidate ids to post; default: all new rows
+
+
 @app.post("/api/finesse/transactions/jobs/{job_id}/confirm", status_code=202)
-def confirm_transactions(job_id: int, _role: Role = Depends(admin_only)):
+def confirm_transactions(job_id: int, body: ConfirmIn | None = None, _role: Role = Depends(admin_only)):
     try:
-        poster.confirm(job_id)
+        poster.confirm(job_id, body.selected if body else None)
     except poster.PostError as e:
         raise HTTPException(409, str(e)) from e
     return {"ok": True}

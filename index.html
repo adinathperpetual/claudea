@@ -774,7 +774,7 @@
       <div class="modal-lock" style="background:var(--green-soft);border-color:var(--green-line)">⇪</div>
       <div>
         <h3 id="fpTitle">Upload to Finesse</h3>
-        <p>The file is uploaded (Equity Uploads › Transactions Upload) and the new rows are found in Equity Staging. Nothing is posted until you click <b>Confirm &amp; Post</b>.</p>
+        <p>Tick what to upload; the new rows are then found in Equity Staging. Nothing is posted until you tick the rows and click <b>Confirm &amp; Post</b>.</p>
       </div>
     </div>
     <div class="modal-body" id="fpBody"></div>
@@ -3587,51 +3587,93 @@ $("#fsImportInput").onchange = async e => {
 ["fsUrl","fsExtToken","fsAdmToken"].forEach(id => $("#"+id).addEventListener("keydown", e => { if (e.key === "Enter") $("#fsConnect").click(); }));
 
 /* ================= Upload to Finesse (with confirmation) =================
-   1) the filled template (same file as "Download filled template") is sent to the
-      Client Master service, which uploads it in Finesse and finds the new rows in
-      Equity Staging;  2) this window lists them;  3) only after "Confirm & Post"
-      are they ticked and posted. Unmapped rows and rows that were already in
-      staging are never posted — they are listed for you to check. */
+   Step 1 — tick the extracted transactions to upload.
+   Step 2 — the service uploads them in Finesse and finds them in Equity Staging.
+   Step 3 — tick the staging rows to post (new rows ticked; rows already in staging
+            unticked; unmapped / not found cannot be ticked) and Confirm & Post. */
 const fpOverlay = $("#fpOverlay");
-let fpJob = null, fpTimer = null, fpStatus = "";
-const FP_LABEL = { uploading:"Uploading to Finesse…", awaiting_confirmation:"Ready — check the rows and confirm",
-  posting:"Posting in Finesse…", posted:"Posted", partial:"Partly posted", failed:"Failed", cancelled:"Not posted" };
+let fpJob = null, fpTimer = null, fpStatus = "", fpPick = [];
+const FP_LABEL = { choose:"Choose what to upload", uploading:"Uploading to Finesse…",
+  awaiting_confirmation:"Tick the rows to post, then confirm", posting:"Posting in Finesse…", posted:"Posted",
+  partial:"Partly posted", failed:"Failed", cancelled:"Not posted" };
+const FP_KIND = { new:["new — will be posted","success"], duplicate:["already in staging before this upload","partial"],
+  unmapped:["unmapped in Finesse — map it there first","failed"], not_found:["not found in staging","failed"] };
 function fpClose(){ fpOverlay.classList.remove("on"); clearInterval(fpTimer); fpTimer = null; }
 fpOverlay.addEventListener("click", e => { if (e.target === fpOverlay && !["uploading","posting"].includes(fpStatus)) fpClose(); });
+const fpMoney = v => Number(v).toFixed(2);
 
-function fpList(title, items, cls){
-  if (!items || !items.length) return "";
-  return `<div style="margin-top:8px;font-size:12.5px;line-height:1.6;color:var(--muted)"><b class="${cls||""}">${esc(title)}</b><br>` +
-         items.map(t => "• " + esc(t)).join("<br>") + "</div>";
-}
-function fpRender(j){
-  fpStatus = j.status || "";
-  const d = j.data || {}, accts = d.accounts || {}, res = d.post_result || {};
-  let html = `<p class="diagline"><span class="fs-pill ${fpStatus === "posted" ? "success" : fpStatus === "failed" ? "failed" : "partial"}">` +
-             `${esc(FP_LABEL[fpStatus] || fpStatus)}</span> ${esc(j.step && ["uploading","posting"].includes(fpStatus) ? j.step : "")}</p>`;
-  if (j.message) html += `<p class="diagline">${esc(j.message)}</p>`;
-  for (const [acct, a] of Object.entries(accts)){
-    const rows = (a.to_post || []).map(r => `<tr><td class="mono">${esc(r.trade_date)}</td><td>${esc(r.side)}</td>` +
-      `<td class="mono" style="text-align:right">${esc(r.qty)}</td><td class="mono" style="text-align:right">${Number(r.rate).toFixed(2)}</td>` +
-      `<td class="mono">${esc(r.isin || "")}</td></tr>`).join("");
-    const done = res[acct];
-    html += `<div class="failfile"><div class="ftop"><span>🏦</span><span>${esc(acct)} — ${esc(a.client || "")}</span></div>` +
-      (rows ? `<table class="usertable" style="margin-top:6px"><thead><tr><th>Trade date</th><th>Type</th><th style="text-align:right">Qty</th>` +
-              `<th style="text-align:right">Rate</th><th>ISIN</th></tr></thead><tbody>${rows}</tbody></table>`
-            : `<div style="margin-top:6px;font-size:12.5px;color:var(--muted)">No rows to post for this account.</div>`) +
-      (done ? `<div class="fmsg ${done.still_in_staging ? "bad" : "good"}">Posted ${done.posted} · still in staging ${done.still_in_staging}` +
-              (done.message ? ` · Finesse: ${esc(done.message)}` : "") + `</div>` : "") +
-      fpList("Unmapped in Finesse — not posted (map the scrip/client in Finesse, then post there):", a.unmapped, "log-bad") +
-      fpList("Already in staging before this upload — not posted (possible duplicate upload, check in Finesse):", a.already_in_staging, "log-bad") +
-      fpList("Not found in staging after the upload — not posted:", a.not_found, "log-bad") + `</div>`;
-  }
-  $("#fpBody").innerHTML = html;
-  const waiting = fpStatus === "awaiting_confirmation", busy = ["uploading","posting"].includes(fpStatus);
-  $("#fpConfirm").style.display = waiting ? "" : "none";
-  $("#fpCancel").textContent = waiting ? "Don't post" : "Close";
+function fpButtons(){
+  const choose = fpStatus === "choose", waiting = fpStatus === "awaiting_confirmation",
+        busy = ["uploading","posting"].includes(fpStatus);
+  const n = $$fp("input.fp-row:checked").length;
+  $("#fpConfirm").style.display = (choose || waiting) ? "" : "none";
+  $("#fpConfirm").textContent = choose ? `Upload ${n} selected` : `Confirm & Post ${n} selected`;
+  $("#fpConfirm").disabled = n === 0;
+  $("#fpCancel").textContent = waiting ? "Don't post" : choose ? "Cancel" : "Close";
   $("#fpCancel").disabled = busy;
   $("#fpNote").textContent = busy ? "Working in Finesse — keep this page open." :
-    waiting ? "Only the rows listed above are ticked and posted." : "";
+    waiting ? "Only the ticked rows are ticked and posted in Finesse." :
+    choose ? "Untick anything you don't want uploaded." : "";
+}
+const $$fp = sel => [...$("#fpBody").querySelectorAll(sel)];
+function fpWire(){
+  $$fp("input.fp-row").forEach(c => c.onchange = fpButtons);
+  $$fp("input.fp-all").forEach(a => a.onchange = () => {
+    $$fp(`input.fp-row[data-grp="${a.dataset.grp}"]:not(:disabled)`).forEach(c => c.checked = a.checked); fpButtons(); });
+  fpButtons();
+}
+function fpTable(grp, head, rows){
+  return `<table class="usertable" style="margin-top:6px"><thead><tr><th style="width:34px"><input type="checkbox" class="fp-all" data-grp="${esc(grp)}" checked></th>` +
+         head.map(h => `<th${/qty|rate/i.test(h) ? ' style="text-align:right"' : ""}>${h}</th>`).join("") + `</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// Step 1: choose the extracted transactions to upload
+function fpChoose(rows, left){
+  fpStatus = "choose"; fpPick = rows;
+  const byAcct = {};
+  rows.forEach((r, i) => (byAcct[r.A] = byAcct[r.A] || []).push([r, i]));
+  let html = `<p class="diagline"><span class="fs-pill partial">${FP_LABEL.choose}</span> ${rows.length} transaction(s)` +
+             (left ? ` · ${left} without a trading account left out` : "") + `</p>`;
+  for (const [acct, list] of Object.entries(byAcct)){
+    html += `<div class="failfile"><div class="ftop"><span>🏦</span><span>${esc(acct)} — ${esc(list[0][0].B || "")}</span></div>` +
+      fpTable(acct, ["Trade date","Type","Qty","Rate","ISIN"], list.map(([r, i]) =>
+        `<tr><td><input type="checkbox" class="fp-row" data-grp="${esc(acct)}" data-i="${i}" checked></td><td class="mono">${esc(r.C)}</td>` +
+        `<td>${esc(r.J)}</td><td class="mono" style="text-align:right">${esc(r.K)}</td><td class="mono" style="text-align:right">${fpMoney(r.L)}</td>` +
+        `<td class="mono">${esc(r.H)}</td></tr>`).join("")) + `</div>`;
+  }
+  $("#fpBody").innerHTML = html; fpWire();
+}
+
+// Steps 2–3: follow the job; when it waits, show the staging rows with tick boxes
+function fpRender(j){
+  const prev = fpStatus; fpStatus = j.status || "";
+  const d = j.data || {}, accts = d.accounts || {}, res = d.post_result || {}, tm = d.timings || {};
+  if (prev === "awaiting_confirmation" && fpStatus === "awaiting_confirmation") return;   // keep the user's ticks
+  const waiting = fpStatus === "awaiting_confirmation", chosen = new Set(d.selected || []);
+  let html = `<p class="diagline"><span class="fs-pill ${fpStatus === "posted" ? "success" : fpStatus === "failed" ? "failed" : "partial"}">` +
+             `${esc(FP_LABEL[fpStatus] || fpStatus)}</span> ${esc(["uploading","posting"].includes(fpStatus) ? (j.step || "") : "")}</p>`;
+  if (j.message) html += `<p class="diagline">${esc(j.message)}</p>`;
+  for (const [acct, a] of Object.entries(accts)){
+    const done = res[acct];
+    const rows = (a.candidates || []).map(c => {
+      const r = c.row, can = ["new","duplicate"].includes(c.kind) && waiting;
+      const on = waiting ? c.kind === "new" : chosen.has(c.id);
+      const [kTxt, kCls] = FP_KIND[c.kind] || [c.kind, ""];
+      return `<tr><td><input type="checkbox" class="fp-row" data-grp="${esc(acct)}" data-id="${esc(c.id)}" ${on ? "checked" : ""} ${can ? "" : "disabled"}></td>` +
+        `<td class="mono">${esc(r.trade_date)}</td><td>${esc(r.side)}</td><td class="mono" style="text-align:right">${esc(r.qty)}</td>` +
+        `<td class="mono" style="text-align:right">${fpMoney(r.rate)}</td><td class="mono">${esc(r.isin || "")}</td>` +
+        `<td><span class="fs-pill ${kCls}">${esc(kTxt)}</span></td></tr>`;
+    }).join("");
+    html += `<div class="failfile"><div class="ftop"><span>🏦</span><span>${esc(acct)} — ${esc(a.client || "")}</span></div>` +
+      fpTable(acct, ["Trade date","Type","Qty","Rate","ISIN","Status"], rows) +
+      (done ? `<div class="fmsg ${done.still_in_staging ? "bad" : "good"}">Posted ${done.posted} of ${done.selected}` +
+              (done.message ? ` · Finesse: ${esc(done.message)}` : "") + `</div>` : "") + `</div>`;
+  }
+  const t = [tm.upload_total && `upload & find ${Math.round(tm.upload_total)}s`, tm.post_total && `posting ${Math.round(tm.post_total)}s`].filter(Boolean);
+  if (t.length) html += `<p class="diagline" style="color:var(--muted)">Time taken: ${t.join(" · ")}</p>`;
+  $("#fpBody").innerHTML = html;
+  if (!waiting) $$fp("input.fp-all").forEach(a => a.disabled = true);
+  fpWire();
 }
 function fpPoll(){
   clearInterval(fpTimer);
@@ -3641,32 +3683,40 @@ function fpPoll(){
       fpRender(j);
       if (!["uploading","posting"].includes(j.status)){ clearInterval(fpTimer); fpTimer = null; }
     } catch(e){ /* service busy — keep polling */ }
-  }, 2000);
+  }, 1500);
 }
-$("#expFinesse").onclick = async () => {
-  if (!fs.up){ toast("Connect the Client Master service first (card 2)."); return; }
-  if (!fs.admin){ toast("Enter the admin token in card 2 and click Connect to upload to Finesse."); return; }
-  const all = templateRows(), rows = all.filter(r => r.A);
-  if (!templateReady(rows)) return;
-  const left = all.length - rows.length;
+async function fpUpload(rows){
   let bytes;
   try{ bytes = buildFilledTemplate(rows, false); }
   catch(e){ toast("Could not write the template: " + (e.message || e)); return; }
   const form = new FormData();
   form.append("file", new Blob([bytes], { type: XLSX_MIME }), filledName());
-  fpRender({ status:"uploading", step:"Sending the file…",
-             message: left ? `${left} row(s) without a trading account were left out.` : "" });
-  fpOverlay.classList.add("on");
+  fpStatus = ""; fpRender({ status:"uploading", step:"Sending the file…" });
   try{
     const user = encodeURIComponent(authCurrent ? authCurrent.username : "");
     const r = await fsFetch(`/api/finesse/transactions/upload?user=${user}`, { admin:true, method:"POST", form, timeout:60000 });
     fpJob = r.job_id; fpPoll();
   } catch(e){ fpRender({ status:"failed", message: e.message }); }
+}
+$("#expFinesse").onclick = () => {
+  if (!fs.up){ toast("Connect the Client Master service first (card 2)."); return; }
+  if (!fs.admin){ toast("Enter the admin token in card 2 and click Connect to upload to Finesse."); return; }
+  const all = templateRows(), rows = all.filter(r => r.A);
+  if (!templateReady(rows)) return;
+  fpChoose(rows, all.length - rows.length);
+  fpOverlay.classList.add("on");
 };
 $("#fpConfirm").onclick = async () => {
+  if (fpStatus === "choose"){
+    const picked = $$fp("input.fp-row:checked").map(c => fpPick[+c.dataset.i]);
+    if (picked.length) fpUpload(picked);
+    return;
+  }
+  const selected = $$fp("input.fp-row:checked").map(c => c.dataset.id);
+  if (!selected.length) return;
   try{
-    await fsFetch(`/api/finesse/transactions/jobs/${fpJob}/confirm`, { admin:true, method:"POST" });
-    fpRender({ status:"posting", step:"Starting…" }); fpPoll();
+    await fsFetch(`/api/finesse/transactions/jobs/${fpJob}/confirm`, { admin:true, method:"POST", body:{ selected } });
+    fpStatus = "posting"; fpButtons(); $("#fpNote").textContent = "Posting in Finesse — keep this page open."; fpPoll();
   } catch(e){ toast(e.message); }
 };
 $("#fpCancel").onclick = async () => {
