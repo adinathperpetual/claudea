@@ -101,16 +101,24 @@ def run() -> int:
 
     print("\nStep 3 of 3 — test the Finesse login")
     if input("  Test the Finesse login now? (Y/n): ").strip().lower() in ("", "y", "yes"):
+        import os
+
+        from dotenv import load_dotenv
+
         from . import config
+        # the values were just written to .env; load them (they weren't there at start-up)
+        for k, v in vals.items():
+            os.environ[k] = v
+        load_dotenv(ENV, override=True)
         config.reset_settings()
         from .finesse import FinesseClient
         try:
             with FinesseClient() as fc:
                 fc.store.clear()
                 fc.login()
-            print("  ✔ Finesse login OK.")
+            print("  [OK] Finesse login OK.")
         except Exception as e:  # noqa: BLE001
-            print(f"  ✘ Login test failed: {config.redact(str(e))}")
+            print(f"  [FAILED] Login test failed: {config.redact(str(e))}")
             print("    You can fix the details by running SETUP again, or send this message to IT.")
     print("\nSetup complete. Double-click START to open the tool.\n")
     return 0
