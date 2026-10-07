@@ -2960,10 +2960,31 @@ if (resetTplBtn) resetTplBtn.onclick = async () => {
 });
 
 /* ================= Account resolution ================= */
+/* One client often has several trading accounts (one per broker, several portfolios).
+   The right one is usually printed in the PDF's file name or in the note itself
+   (e.g. CN_20260923_V4SWN_…, "Client Code: S55492940"), so use that to choose. */
+function docTokens(r){
+  const t = (r.file || "") + " " + (r.lines || []).join(" ");
+  return new Set(t.toUpperCase().split(/[^A-Z0-9]+/).filter(x => x.length >= 3));
+}
+function pickAccount(r, master){
+  const m = matchClient(r.client, master);
+  const toks = docTokens(r);
+  const named = master.map(e => ({ ...e, score: scoreNames(r.client, e.name) })).filter(e => e.score >= SUGGEST_MATCH);
+  // 1) an account of this client that the contract note / file name mentions
+  const hits = named.filter(e => e.acct && toks.has(String(e.acct).toUpperCase())).sort((a,b) => b.score - a.score);
+  if (new Set(hits.map(e => String(e.acct).toUpperCase())).size === 1)
+    return { status:"matched", match: hits[0], candidates: m.candidates };
+  // 2) equally good matches that all carry the same account are the same client
+  if (m.status === "ambiguous" && new Set(m.candidates.map(c => String(c.acct).toUpperCase())).size === 1)
+    return { status:"matched", match: m.candidates[0], candidates: m.candidates };
+  return m;
+}
+
 function recomputeAccounts(){
   state.results.forEach(r => {
     if (!r.client){ r.acct = ""; r.acctStatus = "noclient"; return; }
-    const m = matchClient(r.client, masterForMatching());
+    const m = pickAccount(r, masterForMatching());
     r.acctStatus = m.status;
     r.acct = m.status === "matched" ? m.match.acct : "";   // only from the uploaded master file
     r.candidates = m.candidates || [];
