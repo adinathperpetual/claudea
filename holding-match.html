@@ -118,6 +118,10 @@
   .fld select,.fld .val{width:100%;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:8.5px 11px;
     font-size:13px;background:#fff;color:var(--ink);min-height:38px}
   .fld .val{background:var(--surface-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fld select.need{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 4px rgba(180,83,9,.12);font-weight:600;color:var(--amber)}
+  .fld select option{color:var(--ink);font-weight:400}
+  .pill.sug{cursor:pointer;background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent);font-family:inherit}
+  .pill.sug:hover{background:#e2e5ff}
   .fld select:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 
   .stat-line{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -451,6 +455,17 @@ function nameSim(a, b) {
   if (short.length >= 5 && long.startsWith(short)) return 0.92;
   return dice(ca, cb);
 }
+// Person-name similarity tolerant of initials / word order ("Bharat M Nagori" vs "NAGORI BHARAT MITHALAL")
+function nameMatchScore(a, b) {
+  const wa = normName(a).split(" ").filter(w => w.length > 1), wb = normName(b).split(" ").filter(w => w.length > 1);
+  if (!wa.length || !wb.length) return 0;
+  const hit = wa.filter(w => wb.includes(w)).length;
+  // Given name decides between family members: "Viral Nagori" vs "VIRAL BHARAT NAGORI",
+  // or surname-first "NAGORI BHARAT MITHALAL" vs "Bharat M Nagori"
+  const given = wa[0] === wb[0] || (wb[0] === wa[wa.length - 1] && wa[0] === wb[1]);
+  return Math.max(dice(compact(a), compact(b)), hit / Math.min(wa.length, wb.length) * (hit >= 2 ? 1 : 0.6)) * (given ? 1 : 0.8);
+}
+const PICK = "__pick__";
 const hamming = (a, b) => (a.length !== b.length) ? 99 : [...a].reduce((n, c, i) => n + (c !== b[i]), 0);
 
 /* ======================================================================
@@ -805,10 +820,15 @@ class Side {
     this.parsed = this.sheets[name];
     const groups = [...new Set(this.parsed.holdings.map(h => h.group).filter(Boolean))];
     this.groups = groups;
-    this.group = groups.length ? groups[0] : "";
+    // A family file (several clients) is never pre-selected: the user picks the member to match.
+    this.group = groups.length === 1 ? groups[0] : groups.length > 1 ? PICK : "";
+    this.suggest = "";
     const gs = this.q("[data-group]");
-    gs.innerHTML = (groups.length > 1 ? `<option value="">All clients combined</option>` : "") +
-      groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+    gs.innerHTML = (groups.length > 1
+        ? `<option value="${PICK}" disabled>— Select client (${groups.length} in file) —</option>` +
+          groups.map(g => `<option value="${esc(g)}">${esc(g)} (${this.parsed.holdings.filter(h => h.group === g).length} stocks)</option>`).join("") +
+          `<option value="">All clients combined</option>`
+        : groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(""));
     gs.value = this.group;
     this.q("[data-group-fld]").style.display = groups.length ? "" : "none";
     this.render();
@@ -816,9 +836,11 @@ class Side {
 
   get holdings() {
     if (!this.parsed) return [];
+    if (this.needsPick) return [];
     return this.parsed.holdings.filter(h => !this.group || h.group === this.group || (h.group === "" && h._manual));
   }
-  get clientName() { return this.group || (this.parsed && this.parsed.customer) || ""; }
+  get needsPick() { return this.group === PICK; }
+  get clientName() { return (!this.needsPick && this.group) || (this.parsed && this.parsed.customer) || ""; }
 
   render() {
     const hs = this.holdings;
@@ -826,6 +848,17 @@ class Side {
     this.q("[data-cname]").textContent = cname || "—";
     this.q("[data-name-fld]").style.display = this.groups && this.groups.length ? "none" : "";
     this.q("[data-fsub]").textContent = `${(this.file.size / 1024).toFixed(1)} KB · ${this.kind === "IMG" ? "OCR from image" : this.kind === "PDF" ? "PDF" : "Spreadsheet"}`;
+    this.q("[data-group]").classList.toggle("need", this.needsPick);
+    if (this.needsPick) {
+      this.q("[data-count]").textContent = `${this.groups.length} clients`;
+      this.q("[data-stats]").innerHTML =
+        `<span class="pill warn">⚠ Family file with ${this.groups.length} clients – select the client to match</span>` +
+        (this.suggest ? `<button class="pill sug" data-sug>Suggested: ${esc(this.suggest)} – click to select</button>` : "");
+      const sb = this.q("[data-sug]");
+      if (sb) sb.addEventListener("click", () => { this.group = this.suggest; this.q("[data-group]").value = this.group; this.render(); onChange(); });
+      this.renderReview();
+      return;
+    }
     this.q("[data-count]").textContent = `${hs.length} stocks`;
     const bad = hs.filter(h => Number.isNaN(h.qty)).length;
     const noIsin = hs.filter(h => !h.isin).length;
@@ -950,12 +983,17 @@ const countExtra = document.getElementById("countExtra");
 let RESULT = null, FILTER = "all";
 
 function onChange(fromEdit) {
-  matchBtn.disabled = !(client.parsed && ours.parsed && (client.holdings.length || ours.holdings.length));
-  // Auto-pick our client group that best resembles the client's name
-  if (!fromEdit && ours.groups && ours.groups.length > 1 && client.clientName) {
+  const picking = client.needsPick || ours.needsPick;
+  matchBtn.disabled = picking || !(client.parsed && ours.parsed && (client.holdings.length || ours.holdings.length));
+  matchBtn.title = picking ? "Select the client in the family holding file first" : "";
+  // Suggest (never auto-select) the family member whose name resembles the other statement's client name
+  for (const [side, other] of [[ours, client], [client, ours]]) {
+    if (fromEdit || !side.parsed || !side.needsPick) continue;
     let best = "", bs = 0;
-    ours.groups.forEach(g => { const s = Math.max(nameSim(g, client.clientName), dice(compact(g), compact(client.clientName))); if (s > bs) { bs = s; best = g; } });
-    if (bs >= 0.6 && best !== ours.group) { ours.group = best; ours.q("[data-group]").value = best; ours.render(); }
+    const target = other.parsed && other.clientName;
+    if (target) side.groups.forEach(g => { const s = nameMatchScore(g, target); if (s > bs) { bs = s; best = g; } });
+    const sug = bs >= 0.6 ? best : "";
+    if (sug !== side.suggest) { side.suggest = sug; side.render(); }
   }
   if (document.getElementById("results").classList.contains("on")) {
     if (matchBtn.disabled) document.getElementById("results").classList.remove("on");
