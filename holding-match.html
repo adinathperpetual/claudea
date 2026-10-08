@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Holding Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* ===================== Design tokens ===================== */
+  :root{
+    --bg:#f4f6fb;
+    --surface:#ffffff; --surface-2:#f7f8fc; --surface-3:#eff2f8;
+    --line:#e4e8f1; --line-strong:#cfd6e4;
+    --text:#1b2333; --muted:#5d6779; --muted-2:#8e97a8;
+    --ink:#111827; --ink-2:#1f2937; --ink-3:#374151;
+    --accent:#4f46e5; --accent-soft:#eef0ff; --accent-line:#c7cbfb;
+    --green:#059669; --green-soft:#e7f8f1; --green-line:#b5e8d3;
+    --red:#dc2626; --red-soft:#fdecec; --red-line:#f7c4c4;
+    --amber:#b45309; --amber-soft:#fff6e6; --amber-line:#f6d9a6;
+    --blue:#1d4ed8; --blue-soft:#eaf1ff; --blue-line:#c3d5fb;
+    --shadow-sm:0 1px 2px rgba(17,24,39,.05);
+    --shadow:0 1px 2px rgba(17,24,39,.04), 0 6px 20px -6px rgba(17,24,39,.08);
+    --shadow-md:0 2px 4px rgba(17,24,39,.05), 0 14px 32px -10px rgba(17,24,39,.16);
+    --ring:0 0 0 4px rgba(79,70,229,.15);
+    --r:18px; --r-md:12px; --r-sm:10px;
+    --grad:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);
+    --grad-green:linear-gradient(135deg,#059669 0%,#10b981 100%);
+    --grad-red:linear-gradient(135deg,#dc2626 0%,#f43f5e 100%);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    color:var(--text); line-height:1.5; font-size:14px; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(900px 500px at 105% -10%, rgba(124,58,237,.10), transparent 60%),
+      radial-gradient(800px 460px at -10% 0%, rgba(79,70,229,.09), transparent 55%),
+      var(--bg);
+    background-attachment:fixed; min-height:100vh;
+  }
+  .mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+  h1,h2,h3{font-family:"Space Grotesk","Inter",sans-serif;margin:0;letter-spacing:-.015em}
+  button{font-family:inherit;cursor:pointer}
+  input,select{font-family:inherit}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cdd3e0;border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+
+  /* ===================== Top bar ===================== */
+  .topbar{position:sticky;top:0;z-index:40;background:rgba(13,16,33,.88);
+    backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid rgba(255,255,255,.06);color:#eef0ff}
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(124,58,237,.7),rgba(79,70,229,.7),transparent)}
+  .topbar-inner{max-width:1240px;margin:0 auto;padding:16px 28px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .logo{width:46px;height:46px;border-radius:14px;background:var(--grad);display:grid;place-items:center;
+    box-shadow:0 8px 22px -6px rgba(124,58,237,.7)}
+  .logo svg{width:26px;height:26px}
+  .brand{display:flex;flex-direction:column;gap:2px;flex:1;min-width:240px}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;
+    background:linear-gradient(90deg,#a5b4fc,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:600}
+  .brand h1{font-size:22px;font-weight:700;color:#fff}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:#a3abc4;max-width:620px}
+
+  /* ===================== Layout ===================== */
+  .wrap{max-width:1240px;margin:0 auto;padding:28px 28px 90px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  @media(max-width:600px){.wrap{padding:20px 16px 70px}.topbar-inner{padding:14px 16px}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
+    transition:box-shadow .2s,border-color .2s;overflow:hidden;min-width:0}
+  .card:hover{box-shadow:var(--shadow-md)}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#fbfcff)}
+  .card-head h2{font-size:15.5px;font-weight:600;display:flex;align-items:center;gap:11px;color:var(--ink)}
+  .num-chip{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:9px;background:var(--grad);
+    color:#fff;font-family:"IBM Plex Mono";font-size:12.5px;font-weight:600;box-shadow:0 4px 12px -2px rgba(79,70,229,.45)}
+  .ct{font-family:"IBM Plex Mono";font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-soft);
+    border:1px solid var(--accent-line);border-radius:999px;padding:3px 11px;white-space:nowrap}
+  .card-body{padding:20px 22px 22px}
+
+  /* ===================== Dropzone ===================== */
+  .drop{position:relative;border:1.5px dashed var(--line-strong);border-radius:var(--r-md);
+    background:linear-gradient(180deg,var(--surface-2),#fff);padding:30px 18px;text-align:center;
+    transition:border-color .2s,background .2s,transform .2s;cursor:pointer}
+  .drop:hover{border-color:var(--accent-line)}
+  .drop.hot{border-color:var(--accent);background:var(--accent-soft);transform:scale(1.005);box-shadow:var(--ring)}
+  .drop .ic{width:54px;height:54px;margin:0 auto;border-radius:16px;display:grid;place-items:center;font-size:24px;
+    background:var(--accent-soft);border:1px solid var(--accent-line)}
+  .drop p{margin:12px 0 2px;font-size:15px;font-weight:600;color:var(--ink)}
+  .drop small{color:var(--muted);font-size:12.5px}
+  .fmt{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .fmt span{font-family:"IBM Plex Mono";font-size:10.5px;font-weight:600;letter-spacing:.06em;padding:3px 9px;border-radius:999px;
+    background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+  .drop input[type=file]{display:none}
+
+  .loaded{display:none}
+  .side.has-file .drop{display:none}
+  .side.has-file .loaded{display:block}
+  .filechip{display:flex;align-items:center;gap:12px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:12px 14px}
+  .filechip .fi{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-family:"IBM Plex Mono";
+    font-size:10px;font-weight:700;color:#fff;background:var(--grad-green);flex:0 0 auto;letter-spacing:.04em}
+  .filechip .fi.pdf{background:var(--grad-red)} .filechip .fi.img{background:linear-gradient(135deg,#0ea5e9,#6366f1)}
+  .filechip .meta{flex:1;min-width:0}
+  .filechip .nm{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filechip .sub{font-size:12px;color:var(--muted)}
+  .x{border:none;background:var(--surface);border:1px solid var(--line);color:var(--muted);width:30px;height:30px;
+    border-radius:9px;font-size:16px;line-height:1;display:grid;place-items:center;padding:0;flex:0 0 auto}
+  .x:hover{background:var(--red-soft);color:var(--red);border-color:var(--red-line)}
+
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  @media(max-width:600px){.opts{grid-template-columns:1fr}}
+  .fld label{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);margin-bottom:5px}
+  .fld select,.fld .val{width:100%;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:8.5px 11px;
+    font-size:13px;background:#fff;color:var(--ink);min-height:38px}
+  .fld .val{background:var(--surface-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fld select.need{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 4px rgba(180,83,9,.12);font-weight:600;color:var(--amber)}
+  .fld select option{color:var(--ink);font-weight:400}
+  .pill.sug{cursor:pointer;background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent);font-family:inherit}
+  .pill.sug:hover{background:#e2e5ff}
+  .fld select:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+
+  .stat-line{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;
+    border:1px solid var(--line);background:var(--surface-2);color:var(--ink-3)}
+  .pill.ok{background:var(--green-soft);border-color:var(--green-line);color:var(--green)}
+  .pill.warn{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber)}
+
+  .busy{display:none;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:var(--r-md);
+    background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);font-size:13px;font-weight:500}
+  .busy.on{display:flex}
+  .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--accent-line);border-top-color:var(--accent);animation:spin .8s linear infinite;flex:0 0 auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{display:none;margin-top:14px;padding:12px 14px;border-radius:var(--r-md);background:var(--red-soft);
+    border:1px solid var(--red-line);color:var(--red);font-size:13px}
+  .err.on{display:block}
+
+  /* review table */
+  .collapse-h{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;
+    font-size:12.5px;font-weight:600;color:var(--ink-3);padding:10px 14px;margin-top:14px;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm)}
+  .collapse-h:hover{background:var(--surface-3)}
+  .collapse-h .chev{transition:transform .2s;font-size:16px;color:var(--muted-2)}
+  .collapse-h.open{border-radius:var(--r-sm) var(--r-sm) 0 0}
+  .collapse-h.open .chev{transform:rotate(90deg);color:var(--accent)}
+  .review{display:none;border:1px solid var(--line);border-top:none;border-radius:0 0 var(--r-sm) var(--r-sm);background:#fff}
+  .review.open{display:block}
+  .review .scroll{max-height:340px;overflow:auto}
+  .review table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .review th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:10.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted-2);padding:8px 8px;border-bottom:1px solid var(--line);z-index:1}
+  .review td{padding:3px 6px;border-bottom:1px solid var(--line)}
+  .review input{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 6px;font-size:12.5px;color:var(--ink)}
+  .review input:hover{border-color:var(--line)}
+  .review input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:var(--ring)}
+  .review input.q{text-align:right;font-family:"IBM Plex Mono"}
+  .review input.i{font-family:"IBM Plex Mono";font-size:11.5px}
+  .review tr.bad input.q{background:var(--amber-soft);border-color:var(--amber-line)}
+  .review .del{border:none;background:none;color:var(--muted-2);font-size:16px;padding:0 6px}
+  .review .del:hover{color:var(--red)}
+  .review .foot{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;font-size:12px;color:var(--muted)}
+
+  /* ===================== Buttons ===================== */
+  .btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r-sm);padding:8.5px 14px;
+    font-size:12.5px;font-weight:600;color:var(--ink-2);display:inline-flex;align-items:center;gap:7px;
+    box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .15s,background .15s,border-color .15s,filter .15s}
+  .btn:hover{background:var(--surface-2);border-color:#b9c2d4;transform:translateY(-1px);box-shadow:0 6px 14px -6px rgba(17,24,39,.18)}
+  .btn.mini{padding:5px 10px;font-size:11.5px;border-radius:8px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+
+  .action-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin:26px 0}
+  .match-btn{position:relative;border:none;border-radius:999px;padding:16px 42px;font-size:16px;font-weight:700;color:#fff;
+    font-family:"Space Grotesk";letter-spacing:.01em;background:var(--grad);display:inline-flex;align-items:center;gap:10px;
+    box-shadow:0 14px 34px -10px rgba(79,70,229,.7);transition:transform .15s,box-shadow .15s,filter .15s}
+  .match-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 18px 40px -10px rgba(79,70,229,.8);filter:brightness(1.06)}
+  .match-btn:disabled{background:#c3c8d6;box-shadow:none;cursor:not-allowed}
+  .match-btn svg{width:20px;height:20px}
+  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-3);cursor:pointer;user-select:none;
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px 7px 8px;box-shadow:var(--shadow-sm)}
+  .toggle input{display:none}
+  .toggle .sw{width:34px;height:20px;border-radius:999px;background:var(--line-strong);position:relative;transition:background .2s}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+  .toggle input:checked + .sw{background:var(--accent)}
+  .toggle input:checked + .sw::after{transform:translateX(14px)}
+
+  /* ===================== Results ===================== */
+  #results{display:none}
+  #results.on{display:block;animation:rise .35s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .verdict{display:flex;align-items:center;gap:22px;padding:24px 26px;border-radius:var(--r);color:#fff;position:relative;overflow:hidden;
+    box-shadow:var(--shadow-md);flex-wrap:wrap}
+  .verdict.ok{background:linear-gradient(135deg,#047857 0%,#10b981 100%)}
+  .verdict.bad{background:linear-gradient(135deg,#b91c1c 0%,#f43f5e 100%)}
+  .verdict::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.08)}
+  .verdict .vi{width:68px;height:68px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:0 0 auto;
+    border:2px solid rgba(255,255,255,.35)}
+  .verdict .vi svg{width:36px;height:36px}
+  .verdict .vt{flex:1;min-width:220px;position:relative;z-index:1}
+  .verdict .vt small{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.85}
+  .verdict .vt h2{font-size:30px;font-weight:700;line-height:1.1;margin:2px 0 4px}
+  .verdict .vt p{margin:0;font-size:13.5px;opacity:.92}
+  .verdict .pct{position:relative;z-index:1;text-align:right}
+  .verdict .pct b{display:block;font-family:"Space Grotesk";font-size:42px;line-height:1}
+  .verdict .pct span{font-size:12px;opacity:.85}
+
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:18px 0}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;box-shadow:var(--shadow-sm);
+    border-top:3px solid var(--line-strong);cursor:pointer;transition:transform .15s,box-shadow .15s}
+  .kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+  .kpi.active{box-shadow:var(--ring)}
+  .kpi small{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .kpi b{display:block;font-family:"Space Grotesk";font-size:28px;color:var(--ink);line-height:1.2}
+  .kpi.k-all{border-top-color:var(--accent)} .kpi.k-ok{border-top-color:var(--green)} .kpi.k-diff{border-top-color:var(--amber)}
+  .kpi.k-miss{border-top-color:var(--red)} .kpi.k-extra{border-top-color:var(--blue)}
+
+  .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .search{flex:1;min-width:200px;position:relative}
+  .search input{width:100%;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:9px 12px 9px 34px;font-size:13px}
+  .search input:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted-2)}
+
+  .tbl-wrap{overflow:auto;margin-top:14px;border:1px solid var(--line);border-radius:var(--r-md)}
+  table.res{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+  table.res th{background:var(--surface-2);text-align:left;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);padding:11px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.res th.n,table.res td.n{text-align:right}
+  table.res td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.res tr:last-child td{border-bottom:none}
+  table.res tbody tr{transition:background .12s}
+  table.res tbody tr:hover{background:#fafbff}
+  table.res tr.s-diff{background:var(--amber-soft)} table.res tr.s-diff:hover{background:#fff0d4}
+  table.res tr.s-miss{background:var(--red-soft)} table.res tr.s-miss:hover{background:#fbdcdc}
+  table.res tr.s-extra{background:var(--blue-soft)} table.res tr.s-extra:hover{background:#dde8ff}
+  table.res tr.s-diff td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+  table.res tr.s-miss td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+  table.res tr.s-extra td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
+  table.res tr.s-ok td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+  .sname{font-weight:600;color:var(--ink)}
+  .salt{font-size:11.5px;color:var(--muted)}
+  .isin{font-family:"IBM Plex Mono";font-size:11.5px;color:var(--muted)}
+  .q{font-family:"IBM Plex Mono";font-variant-numeric:tabular-nums;font-weight:500}
+  .dpos{color:var(--green);font-weight:700} .dneg{color:var(--red);font-weight:700} .dz{color:var(--muted-2)}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap;border:1px solid}
+  .badge.ok{background:var(--green-soft);color:var(--green);border-color:var(--green-line)}
+  .badge.diff{background:#fff;color:var(--amber);border-color:var(--amber-line)}
+  .badge.miss{background:#fff;color:var(--red);border-color:var(--red-line)}
+  .badge.extra{background:#fff;color:var(--blue);border-color:var(--blue-line)}
+  .via{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--muted-2)}
+  .via.fz{color:var(--amber)}
+  .empty{padding:30px;text-align:center;color:var(--muted)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  .footnote{text-align:center;color:var(--muted-2);font-size:12px;margin-top:30px}
+  @media print{
+    .topbar,.grid,.action-bar,.tools,.footnote{display:none !important}
+    body{background:#fff}
+    .verdict,table.res tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
+        <path d="m8 12 3 3 5-6"/>
+      </svg>
+    </div>
+    <div class="brand">
+      <span class="eyebrow">Reconciliation</span>
+      <h1>Holding Statement Match</h1>
+      <p>Upload the client's holding statement and ours, then match stock names and quantities.</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+    <!-- ============ CLIENT ============ -->
+    <section class="card side" id="side-client">
+      <div class="card-head">
+        <h2><span class="num-chip">1</span>Client Holding Statement</h2>
+        <span class="ct" data-count>—</span>
+      </div>
+      <div class="card-body">
+        <label class="drop" data-drop>
+          <div class="ic">📄</div>
+          <p>Drop client statement here</p>
+          <small>or click to browse</small>
+          <div class="fmt"><span>XLSX</span><span>XLS</span><span>CSV</span><span>PDF</span><span>JPG</span><span>PNG</span></div>
+          <input type="file" accept=".xlsx,.xls,.csv,.pdf,image/*" />
+        </label>
+        <div class="loaded">
+          <div class="filechip">
+            <div class="fi" data-fi>XLS</div>
+            <div class="meta"><div class="nm" data-fname></div><div class="sub" data-fsub></div></div>
+            <button class="x" data-remove title="Remove file">×</button>
+          </div>
+          <div class="opts">
+            <div class="fld" data-sheet-fld><label>Sheet / Account</label><select data-sheet></select></div>
+            <div class="fld" data-group-fld><label>Client</label><select data-group></select></div>
+            <div class="fld" data-name-fld><label>Client name</label><div class="val" data-cname>—</div></div>
+          </div>
+          <div class="stat-line" data-stats></div>
+          <div class="collapse-h" data-toggle-review><span>Review &amp; edit extracted holdings</span><span class="chev">›</span></div>
+          <div class="review" data-review></div>
+        </div>
+        <div class="busy" data-busy><div class="spin"></div><span data-busy-text>Reading…</span></div>
+        <div class="err" data-err></div>
+      </div>
+    </section>
+
+    <!-- ============ OURS ============ -->
+    <section class="card side" id="side-ours">
+      <div class="card-head">
+        <h2><span class="num-chip">2</span>Our Holding Statement</h2>
+        <span class="ct" data-count>—</span>
+      </div>
+      <div class="card-body">
+        <label class="drop" data-drop>
+          <div class="ic">🏦</div>
+          <p>Drop our holding statement here</p>
+          <small>Equity Holdings export (Excel)</small>
+          <div class="fmt"><span>XLSX</span><span>XLS</span><span>CSV</span></div>
+          <input type="file" accept=".xlsx,.xls,.csv" />
+        </label>
+        <div class="loaded">
+          <div class="filechip">
+            <div class="fi" data-fi>XLS</div>
+            <div class="meta"><div class="nm" data-fname></div><div class="sub" data-fsub></div></div>
+            <button class="x" data-remove title="Remove file">×</button>
+          </div>
+          <div class="opts">
+            <div class="fld" data-sheet-fld><label>Sheet</label><select data-sheet></select></div>
+            <div class="fld" data-group-fld><label>Client</label><select data-group></select></div>
+            <div class="fld" data-name-fld><label>Client name</label><div class="val" data-cname>—</div></div>
+          </div>
+          <div class="stat-line" data-stats></div>
+          <div class="collapse-h" data-toggle-review><span>Review &amp; edit extracted holdings</span><span class="chev">›</span></div>
+          <div class="review" data-review></div>
+        </div>
+        <div class="busy" data-busy><div class="spin"></div><span data-busy-text>Reading…</span></div>
+        <div class="err" data-err></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="action-bar">
+    <button class="match-btn" id="matchBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+      Match Holdings
+    </button>
+    <label class="toggle" title="By default only our stocks are compared. Turn on to also list stocks the client holds that are not in our statement (for information only – they never affect the result).">
+      <input type="checkbox" id="showExtra" /><span class="sw"></span>Also show client's other stocks (not in our statement)
+    </label>
+  </div>
+
+  <section id="results">
+    <div class="verdict" id="verdict"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Stock-wise comparison</h2>
+        <span class="ct" id="shownCt"></span>
+      </div>
+      <div class="card-body">
+        <div class="tools">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="q" placeholder="Search stock name or ISIN…" />
+          </div>
+          <button class="btn" id="exportBtn">⬇ Export Excel</button>
+          <button class="btn" onclick="window.print()">🖨 Print</button>
+        </div>
+        <div class="tbl-wrap">
+          <table class="res">
+            <thead><tr>
+              <th>#</th><th>Stock</th><th>ISIN</th><th class="n">Our Qty</th><th class="n">Client Qty</th>
+              <th class="n">Difference<br><span style="text-transform:none;letter-spacing:0;font-weight:500">(Client − Ours)</span></th>
+              <th>Status</th><th>Matched by</th>
+            </tr></thead>
+            <tbody id="resBody"></tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--green)"></i>Matched</span>
+          <span><i style="background:var(--amber)"></i>Quantity differs</span>
+          <span><i style="background:var(--red)"></i>Missing in client statement</span>
+          <span data-extra-legend style="display:none"><i style="background:var(--blue)"></i>Only in client statement (info only)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="footnote">All files are processed in your browser. Nothing is uploaded to a server.</p>
+</main>
+
+<script>
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ======================================================================
+   Helpers
+   ====================================================================== */
+const ISIN_RE = /\bIN[A-Z0-9]{9}[0-9]\b/;
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clean = v => String(v ?? "").replace(/\s+/g, " ").trim();
+const fmtQty = n => (n == null || Number.isNaN(n)) ? "—" : Number(n).toLocaleString("en-IN", {maximumFractionDigits: 4});
+
+function parseNum(v) {
+  if (typeof v === "number") return v;
+  let s = clean(v).replace(/[₹,\s]/g, "");
+  if (!s) return NaN;
+  if (/^\(.*\)$/.test(s)) s = "-" + s.slice(1, -1);
+  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
+}
+const isNumCell = v => !Number.isNaN(parseNum(v));
+
+/* Name normalisation used for matching */
+const STOP = new Set(["LIMITED","LTD","PVT","PRIVATE","THE","CO","COMPANY","CORP","CORPORATION","INC","EQ","EQUITY","SHARES","SHARE","NEW","FV","RS","RE","AND","OF"]);
+function normName(s) {
+  return clean(s).toUpperCase()
+    .replace(/&/g, " AND ")
+    .replace(/\b\d+\s*\/-/g, " ")
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(w => w && !STOP.has(w) && !/^\d+$/.test(w) && !/^EQ\d*$/.test(w))
+    .join(" ");
+}
+const compact = s => normName(s).replace(/ /g, "");
+function dice(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const m = new Map();
+  for (let i = 0; i < a.length - 1; i++) { const g = a.substr(i, 2); m.set(g, (m.get(g) || 0) + 1); }
+  let hit = 0;
+  for (let i = 0; i < b.length - 1; i++) { const g = b.substr(i, 2); const c = m.get(g); if (c) { hit++; m.set(g, c - 1); } }
+  return (2 * hit) / (a.length + b.length - 2);
+}
+function nameSim(a, b) {
+  const ca = compact(a), cb = compact(b);
+  if (!ca || !cb) return 0;
+  if (ca === cb) return 1;
+  const short = ca.length < cb.length ? ca : cb, long = ca.length < cb.length ? cb : ca;
+  if (short.length >= 5 && long.startsWith(short)) return 0.92;
+  return dice(ca, cb);
+}
+// Person-name similarity tolerant of initials / word order ("Bharat M Nagori" vs "NAGORI BHARAT MITHALAL")
+function nameMatchScore(a, b) {
+  const wa = normName(a).split(" ").filter(w => w.length > 1), wb = normName(b).split(" ").filter(w => w.length > 1);
+  if (!wa.length || !wb.length) return 0;
+  const hit = wa.filter(w => wb.includes(w)).length;
+  // Given name decides between family members: "Viral Nagori" vs "VIRAL BHARAT NAGORI",
+  // or surname-first "NAGORI BHARAT MITHALAL" vs "Bharat M Nagori"
+  const given = wa[0] === wb[0] || (wb[0] === wa[wa.length - 1] && wa[0] === wb[1]);
+  return Math.max(dice(compact(a), compact(b)), hit / Math.min(wa.length, wb.length) * (hit >= 2 ? 1 : 0.6)) * (given ? 1 : 0.8);
+}
+const PICK = "__pick__";
+const hamming = (a, b) => (a.length !== b.length) ? 99 : [...a].reduce((n, c, i) => n + (c !== b[i]), 0);
+
+/* ======================================================================
+   Table parsing (works on a 2D array of cells from Excel / PDF / OCR)
+   ====================================================================== */
+const hnorm = h => clean(h).toLowerCase().replace(/[_.]/g, " ").replace(/\s+/g, " ");
+
+function scoreQtyHeader(raw) {
+  const h = hnorm(raw);
+  if (!h || h.length > 40) return 0;
+  if (/cost|price|value|valuation|rate|amount|p\s*&\s*l|p\/l|%|date|return|xirr|avg|average|gain|loss|nav|ltp|closing price|market/.test(h)) return 0;
+  if (/short\s*term|long\s*term|pledge|lock|freeze|pending|remat|demat|lent|earmark|block/.test(h)) return 0;
+  if (/total\s*(holding|qty|quantity|balance|shares|units)|holding\s*total|total\s*bal/.test(h)) return 100;
+  if (/^(net\s*)?(qty|quantity)(\s*held)?$|holding\s*(qty|quantity)|(qty|quantity)\s*held|no\s*of\s*(shares|units)/.test(h)) return 90;
+  if (/current\s*bal|closing\s*bal|^balance$|net\s*bal/.test(h)) return 75;
+  if (/free\s*(holding|bal|qty)|available|beneficia/.test(h)) return 60;
+  if (/qty|quantity|holding|units|shares|balance/.test(h)) return 50;
+  return 0;
+}
+function scoreNameHeader(raw) {
+  const h = hnorm(raw);
+  if (!h || h.length > 40) return 0;
+  if (/isin\s*desc|security\s*(name|desc)|scrip\s*name|stock\s*name|equity\s*name|company\s*name|instrument\s*name|share\s*name|name\s*of\s*(the\s*)?(security|company|scrip)/.test(h)) return 100;
+  if (/^(name|scrip|security|stock|company|instrument|description|particulars|symbol|equity)$/.test(h)) return 80;
+  if (/description|scrip|security|company|stock|instrument|particulars/.test(h) && !/code|type|class|sector|category|customer|client/.test(h)) return 50;
+  return 0;
+}
+const isIsinHeader = h => /isin/.test(hnorm(h)) && !/desc|name/.test(hnorm(h));
+
+function findHeader(rows) {
+  const lim = Math.min(rows.length, 120);
+  for (let r = 0; r < lim; r++) {
+    const row = rows[r] || [];
+    let nc = -1, ns = 0, qc = -1, qs = 0;
+    row.forEach((c, i) => {
+      const a = scoreNameHeader(c); if (a > ns) { ns = a; nc = i; }
+      const b = scoreQtyHeader(c);  if (b > qs) { qs = b; qc = i; }
+    });
+    if (nc >= 0 && qc >= 0 && nc !== qc) {
+      const ic = row.findIndex(isIsinHeader);
+      const comp = [];
+      row.forEach((c, i) => { if (/free|pledge|lock|freeze|safe|pending|lent|earmark/.test(hnorm(c))) comp.push(i); });
+      return { r, nc, qc, ic, qTotal: qs === 100, comp };
+    }
+  }
+  return null;
+}
+
+function detectCustomer(rows, upto) {
+  for (let r = 0; r < Math.min(upto, rows.length); r++) {
+    const row = (rows[r] || []).map(clean);
+    const li = row.findIndex(c => /^(customer|client|account|holder|investor|first holder)\s*(name)?\s*:?$/i.test(c) || /^name\s*of\s*(the\s*)?(client|holder|investor)/i.test(c));
+    if (li >= 0) { const v = row.slice(li + 1).find(Boolean); if (v) return v; }
+    const inline = row.find(c => /^(customer|client|investor)\s*name\s*[:\-]\s*\S/i.test(c));
+    if (inline) return inline.replace(/^.*?name\s*[:\-]\s*/i, "");
+  }
+  // title row like "NAGORI BHARAT MITHALAL HUF      Holding As On:01-Oct-2026"
+  for (let r = 0; r < Math.min(upto, rows.length); r++) {
+    const first = (rows[r] || []).map(v => String(v ?? "")).find(c => c.trim());
+    if (first && /[A-Za-z]{3}/.test(first)) {
+      const t = first.split(/\s{3,}|holding\s*as/i)[0].trim();
+      if (t && t.length <= 70 && !ISIN_RE.test(t)) return t;
+    }
+  }
+  return "";
+}
+
+function parseTable(rows) {
+  const out = { holdings: [], customer: "", header: false };
+  const H = findHeader(rows);
+  out.customer = detectCustomer(rows, H ? H.r : 15);
+  if (!H) { out.holdings = parseHeuristic(rows); return out; }
+  out.header = true;
+  let group = "";
+  for (let r = H.r + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const cells = row.map(clean);
+    const nonEmpty = cells.filter(Boolean);
+    if (!nonEmpty.length) continue;
+    // repeated header line (multi-page PDF or stacked tables)
+    if (scoreNameHeader(cells[H.nc]) && scoreQtyHeader(cells[H.qc])) continue;
+    // "Customer Name | XYZ" label row
+    const lbl = cells.findIndex(c => /^(customer|client|account|holder|investor)\s*name\s*:?$/i.test(c));
+    if (lbl >= 0) { group = cells.slice(lbl + 1).find(Boolean) || group; continue; }
+
+    let name = cells[H.nc] || "";
+    let isin = "";
+    if (H.ic >= 0) isin = (cells[H.ic].toUpperCase().match(ISIN_RE) || [""])[0];
+    if (!isin) isin = (cells.join(" ").toUpperCase().match(ISIN_RE) || [""])[0];
+    if (/^(grand\s*)?total\b/i.test(name) || /^(grand\s*)?total\b/i.test(nonEmpty[0])) continue;
+    if (!name && !isin) continue;
+
+    let qty = parseNum(row[H.qc]);
+    let note = "";
+    // DP style: "Total Holding" blank/0 while Free/Pledge/Locked carry the actual balance
+    if (H.qTotal && H.comp.length && (!qty || Number.isNaN(qty))) {
+      const parts = H.comp.map(i => parseNum(row[i]));
+      const sum = parts.reduce((a, b) => a + (Number.isNaN(b) ? 0 : b), 0);
+      if (sum > 0) { qty = sum; note = "Total column was 0 – used Free + Pledge + Locked"; }
+      else if (parts.some(Number.isNaN)) { qty = NaN; }
+    }
+    // Group heading row: a name with nothing else on the line (e.g. "Gautam Sanghvi")
+    if (!isin && nonEmpty.length === 1 && name) { group = name; continue; }
+    if (!isin && Number.isNaN(qty) && nonEmpty.length < 3) continue;
+    out.holdings.push({ name: name || isin, isin, qty, group, note });
+  }
+  return out;
+}
+
+/* Fallback for files without a recognisable header: any line holding an ISIN */
+function parseHeuristic(rows) {
+  const res = [];
+  for (const row of rows) {
+    const tokens = [];
+    (row || []).forEach((c, ci) => {
+      clean(c).split(" ").filter(Boolean).forEach(t => tokens.push({ t, ci }));
+      tokens.push({ t: "|", ci });
+    });
+    const ii = tokens.findIndex(x => ISIN_RE.test(x.t.toUpperCase()));
+    if (ii < 0) continue;
+    const isin = tokens[ii].t.toUpperCase().match(ISIN_RE)[0];
+    let ns = -1, ne = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i].t;
+      const wordy = i !== ii && t !== "|" && /[A-Za-z]/.test(t) && !/^(equity|eq|nse|bse|demat|shares?|inr|rs\.?)$/i.test(t);
+      if (wordy) { if (ns < 0) ns = i; ne = i; }
+      else if (ns >= 0 && tokens.slice(ns, ne + 1).map(x => x.t).join("").replace(/[^A-Za-z]/g, "").length >= 3) break;
+      else if (ns >= 0) { ns = -1; ne = -1; }
+    }
+    const name = ns >= 0 ? tokens.slice(ns, ne + 1).map(x => x.t).join(" ") : isin;
+    let qty = NaN;
+    for (let i = Math.max(ii, ne) + 1; i < tokens.length; i++) {
+      const n = parseNum(tokens[i].t);
+      if (!Number.isNaN(n)) { qty = n; break; }
+    }
+    res.push({ name, isin, qty, group: "", note: "" });
+  }
+  return res;
+}
+
+/* ======================================================================
+   PDF / image → positioned text items → rows
+   ====================================================================== */
+function itemsToLines(items) {
+  items = items.filter(i => i.s && i.s.trim()).sort((a, b) => a.y - b.y || a.x - b.x);
+  const lines = [];
+  for (const it of items) {
+    const ln = lines[lines.length - 1];
+    if (ln && Math.abs(it.y - ln.y) <= Math.max(2, 0.5 * Math.min(it.h, ln.h))) ln.items.push(it);
+    else lines.push({ y: it.y, h: it.h, items: [it] });
+  }
+  return lines.map(ln => {
+    ln.items.sort((a, b) => a.x - b.x);
+    const cells = [];
+    for (const it of ln.items) {
+      const c = cells[cells.length - 1];
+      const gap = c ? it.x - c.x1 : Infinity;
+      if (c && gap <= Math.max(2, 0.6 * it.h)) { c.s += (gap > 0.12 * it.h ? " " : "") + it.s; c.x1 = Math.max(c.x1, it.x + it.w); }
+      else cells.push({ x0: it.x, x1: it.x + it.w, s: it.s });
+    }
+    cells.forEach(c => c.s = clean(c.s));
+    return cells.filter(c => c.s);
+  });
+}
+
+/* Snap each line's cells to the columns of the detected header line */
+function alignLines(lines) {
+  const raw = lines.map(l => l.map(c => c.s));
+  const H = findHeader(raw);
+  if (!H) return raw;
+  const anchors = lines[H.r];
+  return lines.map((l, idx) => {
+    if (idx <= H.r) return l.map(c => c.s);
+    const arr = new Array(anchors.length).fill("");
+    for (const c of l) {
+      let best = -1, bestOv = 0;
+      anchors.forEach((a, j) => {
+        const ov = Math.min(c.x1, a.x1) - Math.max(c.x0, a.x0);
+        if (ov > bestOv) { bestOv = ov; best = j; }
+      });
+      if (best < 0) {
+        const cx = (c.x0 + c.x1) / 2; let bd = Infinity;
+        anchors.forEach((a, j) => { const d = Math.abs(cx - (a.x0 + a.x1) / 2); if (d < bd) { bd = d; best = j; } });
+      }
+      arr[best] = arr[best] ? arr[best] + " " + c.s : c.s;
+    }
+    return arr;
+  });
+}
+
+function parseLines(lines) {
+  const a = parseTable(alignLines(lines));
+  const raw = lines.map(l => l.map(c => c.s));
+  const b = parseHeuristic(raw);
+  const good = h => h.filter(x => !Number.isNaN(x.qty)).length;
+  if (good(b) > good(a.holdings)) a.holdings = b;
+  if (!a.customer) a.customer = detectCustomer(raw, 15);
+  return a;
+}
+
+let tesseractLoading = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  if (!tesseractLoading) tesseractLoading = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    s.onload = res; s.onerror = () => rej(new Error("Could not load the OCR engine (check internet connection)."));
+    document.head.appendChild(s);
+  });
+  return tesseractLoading;
+}
+async function ocrItems(source, onProgress, yOffset = 0) {
+  await loadTesseract();
+  const { data } = await Tesseract.recognize(source, "eng", {
+    logger: m => { if (m.status === "recognizing text") onProgress(Math.round(m.progress * 100)); }
+  });
+  return (data.words || []).map(w => ({
+    x: w.bbox.x0, y: w.bbox.y0 + yOffset, w: w.bbox.x1 - w.bbox.x0, h: Math.max(1, w.bbox.y1 - w.bbox.y0), s: w.text
+  }));
+}
+
+async function readPdf(buf, setBusy) {
+  if (!window.pdfjsLib) throw new Error("PDF reader could not be loaded (check internet connection).");
+  let pw, doc;
+  for (let attempt = 0; ; attempt++) {
+    try { doc = await pdfjsLib.getDocument({ data: buf.slice(0), password: pw, verbosity: 0 }).promise; break; }
+    catch (e) {
+      if (e && e.name === "PasswordException" && attempt < 4) {
+        pw = prompt(attempt ? "Wrong password. Enter PDF password again:" : "This PDF is password protected. Enter password (usually PAN / DOB):");
+        if (pw == null) throw new Error("Password required to open this PDF.");
+      } else throw e;
+    }
+  }
+  let items = [], offset = 0, textCount = 0;
+  for (let p = 1; p <= doc.numPages; p++) {
+    setBusy(`Reading PDF page ${p} of ${doc.numPages}…`);
+    const page = await doc.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      textCount++;
+      const h = Math.abs(it.transform[3]) || Math.abs(it.transform[0]) || 10;
+      items.push({ x: it.transform[4], y: offset + (vp.height - it.transform[5]) - h, w: it.width, h, s: it.str });
+    }
+    offset += vp.height + 50;
+  }
+  if (textCount >= 10) return parseLines(itemsToLines(items));
+
+  // Scanned PDF – render each page and OCR it
+  items = []; offset = 0;
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p);
+    const vp = page.getViewport({ scale: 2.5 });
+    const cv = document.createElement("canvas");
+    cv.width = vp.width; cv.height = vp.height;
+    await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    setBusy(`Scanned PDF – OCR page ${p} of ${doc.numPages}…`);
+    items.push(...await ocrItems(cv, pc => setBusy(`Scanned PDF – OCR page ${p} of ${doc.numPages}… ${pc}%`), offset));
+    offset += vp.height + 100;
+  }
+  return parseLines(itemsToLines(items));
+}
+
+/* ======================================================================
+   Side (upload card) controller
+   ====================================================================== */
+class Side {
+  constructor(id, allowAll) {
+    this.el = document.getElementById(id);
+    this.allowAll = allowAll;
+    this.q = s => this.el.querySelector(s);
+    this.reset();
+    const drop = this.q("[data-drop]"), input = this.q("input[type=file]");
+    input.addEventListener("change", () => input.files[0] && this.load(input.files[0]));
+    ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+    ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
+    drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) this.load(f); });
+    this.q("[data-remove]").addEventListener("click", () => { input.value = ""; this.reset(); onChange(); });
+    this.q("[data-sheet]").addEventListener("change", e => { this.useSheet(e.target.value); onChange(); });
+    this.q("[data-group]").addEventListener("change", e => { this.group = e.target.value; this.render(); onChange(); });
+    const tg = this.q("[data-toggle-review]");
+    tg.addEventListener("click", () => { tg.classList.toggle("open"); this.q("[data-review]").classList.toggle("open"); });
+  }
+  reset() {
+    this.file = null; this.sheets = {}; this.sheet = ""; this.parsed = null; this.group = "";
+    this.el.classList.remove("has-file");
+    this.busy(false); this.error("");
+    this.q("[data-count]").textContent = "—";
+  }
+  busy(text) {
+    const b = this.q("[data-busy]");
+    b.classList.toggle("on", !!text);
+    if (text) this.q("[data-busy-text]").textContent = text;
+  }
+  error(msg) { const e = this.q("[data-err]"); e.textContent = msg; e.classList.toggle("on", !!msg); }
+
+  async load(file) {
+    if (!this.allowAll && !/\.(xlsx|xls|csv)$/i.test(file.name)) { this.error("Please upload our holding statement as Excel (.xlsx / .xls) or CSV."); return; }
+    this.reset(); this.file = file; this.error("");
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    try {
+      const buf = await file.arrayBuffer();
+      if (ext === "pdf") {
+        this.kind = "PDF";
+        this.busy("Reading PDF…");
+        const res = await readPdf(new Uint8Array(buf), t => this.busy(t));
+        this.sheets = { "PDF": res }; this.parsedCache = { "PDF": res };
+      } else if (/^image\//.test(file.type) || /^(png|jpe?g|webp|bmp|gif|tiff?)$/.test(ext)) {
+        this.kind = "IMG";
+        this.busy("Loading OCR engine…");
+        const items = await ocrItems(file, pc => this.busy(`Reading image (OCR)… ${pc}%`));
+        const res = parseLines(itemsToLines(items));
+        this.sheets = { "Image": res }; this.parsedCache = { "Image": res };
+      } else {
+        this.kind = ext === "csv" ? "CSV" : "XLS";
+        this.busy("Reading spreadsheet…");
+        const wb = XLSX.read(buf, { type: "array" });
+        this.parsedCache = {};
+        wb.SheetNames.forEach(n => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "", raw: true, blankrows: false });
+          this.parsedCache[n] = parseTable(rows);
+        });
+        this.sheets = this.parsedCache;
+      }
+      this.busy(false);
+      const names = Object.keys(this.sheets);
+      const firstGood = names.find(n => this.sheets[n].holdings.length) || names[0];
+      const sel = this.q("[data-sheet]");
+      sel.innerHTML = names.map(n => {
+        const p = this.sheets[n];
+        return `<option value="${esc(n)}">${esc(n)}${p.customer ? " — " + esc(p.customer) : ""} (${p.holdings.length})</option>`;
+      }).join("");
+      sel.value = firstGood;
+      this.q("[data-sheet-fld]").style.display = names.length > 1 ? "" : "none";
+      this.el.classList.add("has-file");
+      this.q("[data-fname]").textContent = file.name;
+      this.q("[data-fi]").textContent = this.kind;
+      this.q("[data-fi]").className = "fi" + (this.kind === "PDF" ? " pdf" : this.kind === "IMG" ? " img" : "");
+      this.useSheet(firstGood);
+      if (!this.parsed.holdings.length) this.error("No holdings could be detected in this file. You can add rows manually in the review table below.");
+    } catch (e) {
+      console.error(e);
+      this.busy(false);
+      this.error("Could not read this file: " + (e && e.message ? e.message : e));
+    }
+    onChange();
+  }
+
+  useSheet(name) {
+    this.sheet = name;
+    this.parsed = this.sheets[name];
+    const groups = [...new Set(this.parsed.holdings.map(h => h.group).filter(Boolean))];
+    this.groups = groups;
+    // A family file (several clients) is never pre-selected: the user picks the member to match.
+    this.group = groups.length === 1 ? groups[0] : groups.length > 1 ? PICK : "";
+    this.suggest = "";
+    const gs = this.q("[data-group]");
+    gs.innerHTML = (groups.length > 1
+        ? `<option value="${PICK}" disabled>— Select client (${groups.length} in file) —</option>` +
+          groups.map(g => `<option value="${esc(g)}">${esc(g)} (${this.parsed.holdings.filter(h => h.group === g).length} stocks)</option>`).join("") +
+          `<option value="">All clients combined</option>`
+        : groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(""));
+    gs.value = this.group;
+    this.q("[data-group-fld]").style.display = groups.length ? "" : "none";
+    this.render();
+  }
+
+  get holdings() {
+    if (!this.parsed) return [];
+    if (this.needsPick) return [];
+    return this.parsed.holdings.filter(h => !this.group || h.group === this.group || (h.group === "" && h._manual));
+  }
+  get needsPick() { return this.group === PICK; }
+  get clientName() { return (!this.needsPick && this.group) || (this.parsed && this.parsed.customer) || ""; }
+
+  render() {
+    const hs = this.holdings;
+    const cname = this.clientName;
+    this.q("[data-cname]").textContent = cname || "—";
+    this.q("[data-name-fld]").style.display = this.groups && this.groups.length ? "none" : "";
+    this.q("[data-fsub]").textContent = `${(this.file.size / 1024).toFixed(1)} KB · ${this.kind === "IMG" ? "OCR from image" : this.kind === "PDF" ? "PDF" : "Spreadsheet"}`;
+    this.q("[data-group]").classList.toggle("need", this.needsPick);
+    if (this.needsPick) {
+      this.q("[data-count]").textContent = `${this.groups.length} clients`;
+      this.q("[data-stats]").innerHTML =
+        `<span class="pill warn">⚠ Family file with ${this.groups.length} clients – select the client to match</span>` +
+        (this.suggest ? `<button class="pill sug" data-sug>Suggested: ${esc(this.suggest)} – click to select</button>` : "");
+      const sb = this.q("[data-sug]");
+      if (sb) sb.addEventListener("click", () => { this.group = this.suggest; this.q("[data-group]").value = this.group; this.render(); onChange(); });
+      this.renderReview();
+      return;
+    }
+    this.q("[data-count]").textContent = `${hs.length} stocks`;
+    const bad = hs.filter(h => Number.isNaN(h.qty)).length;
+    const noIsin = hs.filter(h => !h.isin).length;
+    const notes = hs.filter(h => h.note).length;
+    this.q("[data-stats]").innerHTML =
+      `<span class="pill ok">✓ ${hs.length} stocks extracted</span>` +
+      (bad ? `<span class="pill warn">⚠ ${bad} unreadable qty – please fix below</span>` : "") +
+      (noIsin && noIsin < hs.length ? `<span class="pill">${noIsin} without ISIN (matched by name)</span>` : "") +
+      (noIsin === hs.length && hs.length ? `<span class="pill">No ISIN – matching by name</span>` : "") +
+      (notes ? `<span class="pill">${notes} qty from Free+Pledge+Locked</span>` : "") +
+      (this.kind !== "XLS" && this.kind !== "CSV" ? `<span class="pill warn">Auto-read from ${this.kind === "PDF" ? "PDF" : "image"} – please verify</span>` : "");
+    if (bad || this.kind === "IMG") {
+      this.q("[data-toggle-review]").classList.add("open"); this.q("[data-review]").classList.add("open");
+    }
+    this.renderReview();
+  }
+
+  renderReview() {
+    const hs = this.holdings;
+    const box = this.q("[data-review]");
+    box.innerHTML = `<div class="scroll"><table>
+      <thead><tr><th style="width:52%">Stock name</th><th>ISIN</th><th style="width:110px;text-align:right">Qty</th><th></th></tr></thead>
+      <tbody>${hs.map((h, i) => `<tr class="${Number.isNaN(h.qty) ? "bad" : ""}" data-i="${i}">
+        <td><input data-f="name" value="${esc(h.name)}" title="${esc(h.note)}"></td>
+        <td><input class="i" data-f="isin" value="${esc(h.isin)}"></td>
+        <td><input class="q" data-f="qty" value="${Number.isNaN(h.qty) ? "" : h.qty}" placeholder="?"></td>
+        <td><button class="del" title="Remove row">×</button></td></tr>`).join("")}</tbody></table></div>
+      <div class="foot"><span>Edits here are used for matching.</span><button class="btn mini" data-add>+ Add row</button></div>`;
+    box.querySelectorAll("tbody tr").forEach(tr => {
+      const h = hs[+tr.dataset.i];
+      tr.querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+        const f = inp.dataset.f;
+        if (f === "qty") { h.qty = parseNum(inp.value); tr.classList.toggle("bad", Number.isNaN(h.qty)); }
+        else if (f === "isin") h.isin = (clean(inp.value).toUpperCase().match(ISIN_RE) || [clean(inp.value).toUpperCase()])[0];
+        else h.name = clean(inp.value);
+        this.render(); onChange(true);
+      }));
+      tr.querySelector(".del").addEventListener("click", () => {
+        this.parsed.holdings.splice(this.parsed.holdings.indexOf(h), 1);
+        this.render(); onChange(true);
+      });
+    });
+    box.querySelector("[data-add]").addEventListener("click", () => {
+      this.parsed.holdings.push({ name: "", isin: "", qty: NaN, group: this.group, note: "", _manual: true });
+      this.render();
+      const ins = box.querySelectorAll('input[data-f="name"]'); ins[ins.length - 1]?.focus();
+    });
+  }
+}
+
+/* ======================================================================
+   Matching
+   ====================================================================== */
+function aggregate(list) {
+  const map = new Map();
+  for (const h of list) {
+    if (!clean(h.name) && !h.isin) continue;
+    const key = h.isin || "N:" + compact(h.name);
+    const e = map.get(key);
+    if (e) { e.qty = (Number.isNaN(e.qty) || Number.isNaN(h.qty)) ? NaN : e.qty + h.qty; }
+    else map.set(key, { name: clean(h.name), isin: h.isin, qty: h.qty });
+  }
+  return [...map.values()];
+}
+
+function matchHoldings(oursRaw, clientRaw) {
+  const ours = aggregate(oursRaw), client = aggregate(clientRaw);
+  const used = new Set(), pairs = [];
+  const take = (o, c, via) => { used.add(c); pairs.push({ o, c, via }); };
+  const pending = [];
+  // 1. ISIN
+  for (const o of ours) {
+    const c = o.isin && client.find(c => !used.has(c) && c.isin === o.isin);
+    if (c) take(o, c, "ISIN"); else pending.push(o);
+  }
+  // 2. Exact normalised name
+  const pending2 = [];
+  for (const o of pending) {
+    const c = client.find(c => !used.has(c) && compact(c.name) && compact(c.name) === compact(o.name) &&
+      !(o.isin && c.isin && hamming(o.isin, c.isin) > 2));
+    if (c) take(o, c, "Name"); else pending2.push(o);
+  }
+  // 3. Fuzzy name (best pairs first)
+  const cands = [];
+  for (const o of pending2) for (const c of client) {
+    if (used.has(c)) continue;
+    if (o.isin && c.isin && hamming(o.isin, c.isin) > 2) continue;
+    const s = nameSim(o.name, c.name);
+    if (s >= 0.75) cands.push({ o, c, s });
+  }
+  cands.sort((a, b) => b.s - a.s);
+  const doneO = new Set();
+  for (const k of cands) {
+    if (doneO.has(k.o) || used.has(k.c)) continue;
+    doneO.add(k.o); take(k.o, k.c, `Similar name (${Math.round(k.s * 100)}%)`);
+  }
+  const rows = [];
+  for (const o of ours) {
+    const p = pairs.find(p => p.o === o);
+    if (!p) { rows.push({ name: o.name, alt: "", isin: o.isin, our: o.qty, cli: null, diff: null, st: "miss", via: "—" }); continue; }
+    const c = p.c;
+    const unread = Number.isNaN(c.qty) || Number.isNaN(o.qty);
+    const diff = unread ? NaN : c.qty - o.qty;
+    const same = !unread && Math.abs(diff) < 1e-6;
+    rows.push({
+      name: o.name, alt: compact(c.name) !== compact(o.name) ? c.name : "", isin: o.isin || c.isin,
+      our: o.qty, cli: c.qty, diff, st: same ? "ok" : "diff", via: p.via, unread
+    });
+  }
+  for (const c of client) if (!used.has(c))
+    rows.push({ name: c.name, alt: "", isin: c.isin, our: null, cli: c.qty, diff: null, st: "extra", via: "—" });
+  return rows;
+}
+
+/* ======================================================================
+   Results UI
+   ====================================================================== */
+const client = new Side("side-client", true);
+const ours = new Side("side-ours", false);
+const matchBtn = document.getElementById("matchBtn");
+const showExtra = document.getElementById("showExtra");
+let ALL = null, RESULT = null, FILTER = "all";
+
+function onChange(fromEdit) {
+  const picking = client.needsPick || ours.needsPick;
+  matchBtn.disabled = picking || !(client.parsed && ours.parsed && (client.holdings.length || ours.holdings.length));
+  matchBtn.title = picking ? "Select the client in the family holding file first" : "";
+  // Suggest (never auto-select) the family member whose name resembles the other statement's client name
+  for (const [side, other] of [[ours, client], [client, ours]]) {
+    if (fromEdit || !side.parsed || !side.needsPick) continue;
+    let best = "", bs = 0;
+    const target = other.parsed && other.clientName;
+    if (target) side.groups.forEach(g => { const s = nameMatchScore(g, target); if (s > bs) { bs = s; best = g; } });
+    const sug = bs >= 0.6 ? best : "";
+    if (sug !== side.suggest) { side.suggest = sug; side.render(); }
+  }
+  if (document.getElementById("results").classList.contains("on")) {
+    if (matchBtn.disabled) document.getElementById("results").classList.remove("on");
+    else runMatch(false);
+  }
+}
+
+function runMatch(scroll = true) {
+  ALL = matchHoldings(ours.holdings, client.holdings);
+  applyView();
+  const R = document.getElementById("results");
+  R.classList.add("on");
+  if (scroll) R.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Only our stocks are compared; client-only stocks are listed just when the user asks for them
+function applyView() {
+  RESULT = showExtra.checked ? ALL : ALL.filter(r => r.st !== "extra");
+  if (FILTER === "extra" && !showExtra.checked) FILTER = "all";
+  document.querySelector("[data-extra-legend]").style.display = showExtra.checked ? "" : "none";
+  renderResults();
+}
+
+function counts() {
+  const c = { all: RESULT.length, ok: 0, diff: 0, miss: 0, extra: 0 };
+  RESULT.forEach(r => c[r.st]++);
+  return c;
+}
+
+function renderResults() {
+  const c = counts();
+  const scope = c.ok + c.diff + c.miss;
+  const problems = c.diff + c.miss;
+  const pct = scope ? Math.floor((c.ok / scope) * 1000) / 10 : 0;
+  const ok = problems === 0 && scope > 0;
+  const who = ours.clientName || client.clientName;
+  const V = document.getElementById("verdict");
+  V.className = "verdict " + (ok ? "ok" : "bad");
+  V.innerHTML = `
+    <div class="vi">${ok
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>`}</div>
+    <div class="vt">
+      <small>${esc(who ? "Result · " + who : "Result")}</small>
+      <h2>${ok ? "MATCHED" : "NOT MATCHED"}</h2>
+      <p>${ok
+        ? `All ${c.ok} of our stocks match the client's statement with identical quantities.`
+        : [c.diff && `${c.diff} quantity difference${c.diff > 1 ? "s" : ""}`,
+           c.miss && `${c.miss} stock${c.miss > 1 ? "s" : ""} missing in client statement`,
+          ].filter(Boolean).join(" · ")}</p>
+    </div>
+    <div class="pct"><b>${pct}%</b><span>${c.ok} / ${scope} matched</span></div>`;
+
+  const K = [
+    ["all", "k-all", "Our stocks", c.ok + c.diff + c.miss],
+    ["ok", "k-ok", "Matched", c.ok],
+    ["diff", "k-diff", "Qty difference", c.diff],
+    ["miss", "k-miss", "Missing in client", c.miss],
+  ];
+  if (showExtra.checked) K.push(["extra", "k-extra", "Client's other stocks", c.extra]);
+  document.getElementById("kpis").style.gridTemplateColumns = window.innerWidth > 900 ? `repeat(${K.length},1fr)` : "";
+  document.getElementById("kpis").innerHTML = K.map(([f, cls, l, n]) =>
+    `<div class="kpi ${cls} ${FILTER === f ? "active" : ""}" data-f="${f}"><small>${l}</small><b>${n}</b></div>`).join("");
+  document.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => { FILTER = k.dataset.f; renderResults(); }));
+  renderTable();
+}
+
+const ORDER = { miss: 0, diff: 1, extra: 2, ok: 3 };
+function renderTable() {
+  const q = clean(document.getElementById("q").value).toUpperCase();
+  const rows = RESULT
+    .filter(r => FILTER === "all" || r.st === FILTER)
+    .filter(r => !q || (r.name + " " + r.alt + " " + r.isin).toUpperCase().includes(q))
+    .sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name));
+  document.getElementById("shownCt").textContent = `${rows.length} of ${RESULT.length} rows`;
+  const B = document.getElementById("resBody");
+  if (!rows.length) { B.innerHTML = `<tr><td colspan="8" class="empty">No rows to show.</td></tr>`; return; }
+  const badge = {
+    ok: `<span class="badge ok">✓ Matched</span>`,
+    diff: `<span class="badge diff">≠ Qty differs</span>`,
+    miss: `<span class="badge miss">✕ Missing in client</span>`,
+    extra: `<span class="badge extra">＋ Only in client</span>`,
+  };
+  B.innerHTML = rows.map((r, i) => {
+    let d;
+    if (r.st === "miss") d = `<span class="dneg">−${fmtQty(r.our)}</span>`;
+    else if (r.st === "extra") d = `<span class="dpos">+${fmtQty(r.cli)}</span>`;
+    else if (r.unread) d = `<span class="dz">qty unreadable</span>`;
+    else if (Math.abs(r.diff) < 1e-6) d = `<span class="dz">0</span>`;
+    else d = `<span class="${r.diff > 0 ? "dpos" : "dneg"}">${r.diff > 0 ? "+" : "−"}${fmtQty(Math.abs(r.diff))}</span>`;
+    return `<tr class="s-${r.st}">
+      <td class="mono" style="color:var(--muted-2)">${i + 1}</td>
+      <td><div class="sname">${esc(r.name)}</div>${r.alt ? `<div class="salt">Client: ${esc(r.alt)}</div>` : ""}</td>
+      <td class="isin">${esc(r.isin || "—")}</td>
+      <td class="n q">${r.our == null ? `<span class="dz">—</span>` : fmtQty(r.our)}</td>
+      <td class="n q">${r.cli == null ? `<span class="dz">—</span>` : fmtQty(r.cli)}</td>
+      <td class="n q">${d}</td>
+      <td>${badge[r.st]}</td>
+      <td class="via ${/Similar/.test(r.via) ? "fz" : ""}">${esc(r.via)}</td></tr>`;
+  }).join("");
+}
+
+matchBtn.addEventListener("click", () => runMatch(true));
+showExtra.addEventListener("change", () => ALL && applyView());
+document.getElementById("q").addEventListener("input", () => RESULT && renderTable());
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  if (!RESULT) return;
+  const label = { ok: "Matched", diff: "Qty differs", miss: "Missing in client", extra: "Only in client" };
+  const data = [...RESULT].sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name)).map((r, i) => ({
+    "#": i + 1, "Stock": r.name, "Client name for stock": r.alt, "ISIN": r.isin,
+    "Our Qty": r.our ?? "", "Client Qty": r.cli ?? "",
+    "Difference (Client - Ours)": r.st === "miss" ? -r.our : r.st === "extra" ? r.cli : (Number.isNaN(r.diff) ? "" : r.diff),
+    "Status": label[r.st], "Matched by": r.via,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws["!cols"] = [{ wch: 4 }, { wch: 42 }, { wch: 32 }, { wch: 15 }, { wch: 11 }, { wch: 11 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Holding Match");
+  const who = (ours.clientName || client.clientName || "Client").replace(/[^\w ]+/g, "").trim().replace(/\s+/g, "_");
+  XLSX.writeFile(wb, `Holding_Match_${who}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
+</script>
+</body>
+</html>
