@@ -359,8 +359,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
       Match Holdings
     </button>
-    <label class="toggle" title="When on, stocks that appear only in the client's statement also make the result NOT MATCHED">
-      <input type="checkbox" id="countExtra" /><span class="sw"></span>Count stocks only in client statement as mismatch
+    <label class="toggle" title="By default only our stocks are compared. Turn on to also list stocks the client holds that are not in our statement (for information only – they never affect the result).">
+      <input type="checkbox" id="showExtra" /><span class="sw"></span>Also show client's other stocks (not in our statement)
     </label>
   </div>
 
@@ -395,7 +395,7 @@
           <span><i style="background:var(--green)"></i>Matched</span>
           <span><i style="background:var(--amber)"></i>Quantity differs</span>
           <span><i style="background:var(--red)"></i>Missing in client statement</span>
-          <span><i style="background:var(--blue)"></i>Only in client statement</span>
+          <span data-extra-legend style="display:none"><i style="background:var(--blue)"></i>Only in client statement (info only)</span>
         </div>
       </div>
     </div>
@@ -979,8 +979,8 @@ function matchHoldings(oursRaw, clientRaw) {
 const client = new Side("side-client", true);
 const ours = new Side("side-ours", false);
 const matchBtn = document.getElementById("matchBtn");
-const countExtra = document.getElementById("countExtra");
-let RESULT = null, FILTER = "all";
+const showExtra = document.getElementById("showExtra");
+let ALL = null, RESULT = null, FILTER = "all";
 
 function onChange(fromEdit) {
   const picking = client.needsPick || ours.needsPick;
@@ -1002,12 +1002,19 @@ function onChange(fromEdit) {
 }
 
 function runMatch(scroll = true) {
-  const rows = matchHoldings(ours.holdings, client.holdings);
-  RESULT = rows;
-  renderResults();
+  ALL = matchHoldings(ours.holdings, client.holdings);
+  applyView();
   const R = document.getElementById("results");
   R.classList.add("on");
   if (scroll) R.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Only our stocks are compared; client-only stocks are listed just when the user asks for them
+function applyView() {
+  RESULT = showExtra.checked ? ALL : ALL.filter(r => r.st !== "extra");
+  if (FILTER === "extra" && !showExtra.checked) FILTER = "all";
+  document.querySelector("[data-extra-legend]").style.display = showExtra.checked ? "" : "none";
+  renderResults();
 }
 
 function counts() {
@@ -1018,9 +1025,8 @@ function counts() {
 
 function renderResults() {
   const c = counts();
-  const inc = countExtra.checked;
-  const scope = c.ok + c.diff + c.miss + (inc ? c.extra : 0);
-  const problems = c.diff + c.miss + (inc ? c.extra : 0);
+  const scope = c.ok + c.diff + c.miss;
+  const problems = c.diff + c.miss;
   const pct = scope ? Math.floor((c.ok / scope) * 1000) / 10 : 0;
   const ok = problems === 0 && scope > 0;
   const who = ours.clientName || client.clientName;
@@ -1037,18 +1043,18 @@ function renderResults() {
         ? `All ${c.ok} of our stocks match the client's statement with identical quantities.`
         : [c.diff && `${c.diff} quantity difference${c.diff > 1 ? "s" : ""}`,
            c.miss && `${c.miss} stock${c.miss > 1 ? "s" : ""} missing in client statement`,
-           inc && c.extra && `${c.extra} stock${c.extra > 1 ? "s" : ""} only in client statement`].filter(Boolean).join(" · ")}
-        ${!inc && c.extra ? `<br><span style="opacity:.8">${c.extra} extra stock${c.extra > 1 ? "s" : ""} in client statement not counted (toggle above to include).</span>` : ""}</p>
+          ].filter(Boolean).join(" · ")}</p>
     </div>
     <div class="pct"><b>${pct}%</b><span>${c.ok} / ${scope} matched</span></div>`;
 
   const K = [
-    ["all", "k-all", "Total compared", c.all],
+    ["all", "k-all", "Our stocks", c.ok + c.diff + c.miss],
     ["ok", "k-ok", "Matched", c.ok],
     ["diff", "k-diff", "Qty difference", c.diff],
     ["miss", "k-miss", "Missing in client", c.miss],
-    ["extra", "k-extra", "Only in client", c.extra],
   ];
+  if (showExtra.checked) K.push(["extra", "k-extra", "Client's other stocks", c.extra]);
+  document.getElementById("kpis").style.gridTemplateColumns = window.innerWidth > 900 ? `repeat(${K.length},1fr)` : "";
   document.getElementById("kpis").innerHTML = K.map(([f, cls, l, n]) =>
     `<div class="kpi ${cls} ${FILTER === f ? "active" : ""}" data-f="${f}"><small>${l}</small><b>${n}</b></div>`).join("");
   document.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => { FILTER = k.dataset.f; renderResults(); }));
@@ -1091,7 +1097,7 @@ function renderTable() {
 }
 
 matchBtn.addEventListener("click", () => runMatch(true));
-countExtra.addEventListener("change", () => RESULT && renderResults());
+showExtra.addEventListener("change", () => ALL && applyView());
 document.getElementById("q").addEventListener("input", () => RESULT && renderTable());
 
 document.getElementById("exportBtn").addEventListener("click", () => {
