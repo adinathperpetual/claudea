@@ -907,6 +907,8 @@ const num = s => {
   return isNaN(v) ? NaN : (neg ? -Math.abs(v) : v);
 };
 const ISIN_RE = /\b(IN[EFDN][0-9A-Z]{9})\b/;
+// start of an ISIN cut off at a line/cell end, e.g. "INE0N58" (rest on the next line)
+const ISIN_HEAD_RE = /(?:^|\s)IN[EFDN][0-9A-Z]{3,8}(?=\s|$)/;
 
 function pageLines(tc){
   const items = tc.items
@@ -1214,7 +1216,8 @@ function extractByArithmetic(lines){
       let end = lines.length;
       for (let j=p+1;j<lines.length;j++){ if (ANNEXURE_START.test(lines[j].text)){ end=j; break; } }
       const region = lines.slice(p, end);
-      if (region.some(l => ISIN_RE.test(l.text))) regions.push({ region, date: dateForRegion(p) });
+      // an ISIN may be printed broken over two lines (HDFC: "INE0N58" / "01013")
+      if (region.some(l => ISIN_RE.test(l.text) || ISIN_HEAD_RE.test(l.text))) regions.push({ region, date: dateForRegion(p) });
       p = Math.max(end, p+1);
     } else p++;
   }
@@ -1703,6 +1706,40 @@ const CHARGE_ROW = /\b(dp\s*charges?|depositor(?:y|ies)\s*charges?|demat\s*charg
 
 /* Public entry point. Wraps the parser so that, for EVERY broker and EVERY
    layout, DP / depository / fee statements never yield stock trades. */
+/* A security name wrapped mid-word inside a narrow column (HDFC: "VASA DENT" /
+   "ICITY LIMIT" / "ED-DENTAL" ...) is rebuilt from the same name printed whole
+   elsewhere in the note ("VASA DENTICITY LIMITED", annexure). Only applied when the
+   letters match exactly and the extracted name really has words cut in two, so
+   ordinary names are never touched. */
+function fixWrappedNames(trades, lines){
+  const sq = t => String(t||"").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const lineWords = lines.map(l => l.text.split(/\s+/).filter(w => /^[A-Za-z][A-Za-z.&'\-]*$/.test(w)));
+  for (const t of trades){
+    const toks = String(t.scrip||"").split(/\s+/).filter(Boolean);
+    const full = sq(t.scrip);
+    if (toks.length < 2 || full.length < 8) continue;
+    let best = "";
+    for (const ws of lineWords){
+      for (let i=0;i<ws.length;i++){
+        for (let n=2;n<=6 && i+n<=ws.length;n++){
+          const cand = ws.slice(i, i+n), c = sq(cand.join(""));
+          if (c.length < 8 || !full.startsWith(c) || c.length <= sq(best).length) continue;
+          if (c.length < full.length * 0.5) continue;
+          // must repair a cut: a candidate word starts with one extracted piece and is
+          // contained in that piece + the next one ("DENT" + "ICITY" -> "DENTICITY")
+          const repairs = cand.some(w => { const W = sq(w);
+            return toks.some((p, k) => { const P = sq(p);
+              return k+1 < toks.length && P.length >= 2 && W.length > P.length && W.startsWith(P)
+                     && sq(p + toks[k+1]).startsWith(W); }); });
+          if (repairs) best = cand.join(" ");
+        }
+      }
+    }
+    if (best) t.scrip = best;
+  }
+  return trades;
+}
+
 function extractTrades(lines){
   const fullText = lines.map(l => l.text).join("\n");
   // Whole-document skip: a DP Charges / depository / fee statement is not a
@@ -1714,13 +1751,25 @@ function extractTrades(lines){
   const res = extractTradesInner(lines);
   // Final net: drop any row whose scrip is a charge/fee description (covers a DP
   // charges block bundled into a contract-note PDF, on any broker).
-  const kept = (res.trades || []).filter(t => !CHARGE_ROW.test(t.scrip || ""));
+  const kept = fixWrappedNames((res.trades || []).filter(t => !CHARGE_ROW.test(t.scrip || "")), lines);
   const reason = kept.length ? res.reason
                : ((res.trades || []).length ? "only charge rows — no trades" : res.reason);
   return { ...res, trades: kept, reason };
 }
 
 /* ---- Broker format memory --------------------------------------------------
+   HDFC SECURITIES LIMITED
+   Section header: "Equity (Cash) Segment :" then "Security Description BUY SELL Net
+   Obligation For ISIN"; one row per ISIN, BUY/SELL after-brokerage columns (same
+   shape as Anand Rathi). The ISIN AND the security name wrap inside narrow columns:
+   "INE0N58 VASA DENT 250 405.00 0.41 405.41 ..." / "01013 ICITY LIMIT" / "ED-DENTAL"
+   / "KARTSM" — so the summary is recognised by an ISIN *start* (ISIN_HEAD_RE), the
+   ISIN is rejoined by recoverISIN, and the name is rebuilt from the whole name in
+   Annexure B ("VASA DENTICITY LIMITED", fixWrappedNames). Annexure A/B are excluded.
+   Client name: "Client Name : MADHU BHARAT NAGORI CONTRACT NOTE Page 1 of 3" — the
+   name words before "CONTRACT NOTE"; the next line ("HDFC Securities Limited") is the
+   broker, never the client. Trade date: "TRADE DATE 23-SEP-2026".
+
    ANGEL ONE (Angel One Limited)  — detected via /angel\s*(one|broking)/.
    Section header: "Equity Segment - Trade Summary". One row per ISIN, BUY block +
    SELL block + Net Obligation (same shape as Anand Rathi/IIFL). Brokerage is
@@ -1860,7 +1909,8 @@ function findClientName(lines){
   // A candidate is only accepted if the WHOLE line is a name — this stops stray
   // table cells (e.g. a lone "across" or "tal Buy Qty") that happen to align
   // under an anchor from being mistaken for the client.
-  const wholeLineName = t => { t = String(t||"").trim(); return isNameish(t) && !ADDRISH.test(t); };
+  const BROKER_SELF = /\b(securities|broking|stock\s*brokers?|share\s*brokers?)\s+(ltd|limited|pvt|private)\b/i;
+  const wholeLineName = t => { t = String(t||"").trim(); return isNameish(t) && !ADDRISH.test(t) && !BROKER_SELF.test(t); };
 
   const CODE_LBL = /(trading\s*\/?\s*back\s*office\s*code|backoffice\s*code|\bucc\s*code|client\s*code|dp\s*code|gst\s*invoice\s*no|invoice\s*no|branch\s*code)/i;
 
@@ -1888,6 +1938,15 @@ function findClientName(lines){
       if (!NAME_LBL.test(c.text)) continue;
       const after = c.text.replace(new RegExp(".*?"+NAME_LBL.source+"\\s*[:\\-]?\\s*","i"),"").trim();
       if (isNameish(after)) return cleanName(after);
+      // the value runs on into other text on the same line (HDFC: "... NAGORI CONTRACT NOTE Page 1 of 3"):
+      // keep the leading name words, up to the first boilerplate word, label or digit
+      const lead = [];
+      for (const w of after.split(/\s+/)){
+        if (!w || NOT_NAME.test(w) || /\d|[:\/]/.test(w) || /^(page|client|code|ucc|pan|date|id)$/i.test(w)) break;
+        lead.push(w);
+      }
+      const leadName = lead.join(" ");
+      if (lead.length >= 2 && isNameish(leadName) && !BROKER_SELF.test(leadName)) return cleanName(leadName);
       // value in a cell to the right: take the first nameish one, skipping a lone
       // ":" separator; stop at the first non-name cell so an adjacent column
       // ("Trading Back office code ...") is never pulled in.
