@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import db, master, poster, sync
-from .config import ROOT, ConfigError, get_settings
+from .config import BUNDLE, ConfigError, get_settings
 from .records import read_delimited
 from .security import Cipher
 
@@ -123,7 +123,7 @@ def index(request: Request):
     """Serve the extractor. Opened on this PC itself, it is pre-connected with the
     (lookup-only) extractor token, so users never have to paste it. The admin token
     is still required for the Client Master screen."""
-    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    html = (BUNDLE / "index.html").read_text(encoding="utf-8")
     s = get_settings()
     host = request.client.host if request.client else ""
     if host in LOOPBACK and s.extractor_tokens:

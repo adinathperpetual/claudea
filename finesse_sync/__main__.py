@@ -74,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
                 import webbrowser
                 threading.Timer(2.0, lambda: webbrowser.open(f"http://127.0.0.1:{a.port}/")).start()
             print(f"\nContract Note Extractor is running at http://127.0.0.1:{a.port}/ — keep this window open.\n")
-            uvicorn.run("finesse_sync.api:app", host=a.host, port=a.port, log_level="warning")
+            from .api import app
+            uvicorn.run(app, host=a.host, port=a.port, log_level="warning")
             return 0
 
         db.init_db()

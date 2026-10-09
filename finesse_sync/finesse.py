@@ -373,6 +373,20 @@ def _check_not_logged_out(r: httpx.Response) -> None:
 
 
 # ------------------------------------------------------------------ browser automation
+def launch_browser(pw, executable_path: str, headless: bool):
+    """Start Chromium: the configured browser, else Playwright's own Chromium, else the
+    Edge / Chrome already installed on the PC (the .exe build ships no browser)."""
+    if executable_path:
+        return pw.chromium.launch(headless=headless, executable_path=executable_path)
+    first: Exception | None = None
+    for channel in (None, "msedge", "chrome"):
+        try:
+            return pw.chromium.launch(headless=headless, channel=channel)
+        except Exception as e:  # noqa: BLE001
+            first = first or e
+    raise first  # type: ignore[misc]
+
+
 class BrowserSession:
     """Thin Playwright wrapper used for login, the table-scraping fallback and `discover`."""
 
@@ -392,11 +406,11 @@ class BrowserSession:
             raise FinesseError("Playwright is not installed: pip install playwright && playwright install chromium") from e
         self._pw = sync_playwright().start()
         try:
-            self.browser = self._pw.chromium.launch(headless=self.headless,
-                                                    executable_path=self.s.finesse_browser_path or None)
+            self.browser = launch_browser(self._pw, self.s.finesse_browser_path, self.headless)
         except Exception as e:  # noqa: BLE001
             self._pw.stop()
-            raise FinesseError(f"Could not start Chromium for Playwright ({e}). Run: playwright install chromium") from e
+            raise FinesseError(f"Could not start a browser for Finesse ({str(e).strip().splitlines()[0]}). Install Microsoft Edge or Google Chrome, "
+                               "or run: playwright install chromium") from e
         self.ctx = self.browser.new_context(accept_downloads=True)
         self.ctx.set_default_timeout(self.s.http_timeout * 1000)
         if self.initial and self.initial.cookies:

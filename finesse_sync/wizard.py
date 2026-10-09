@@ -11,11 +11,11 @@ import re
 import secrets
 from pathlib import Path
 
-from .config import ROOT
+from .config import BUNDLE, ROOT
 from .security import PAN_RE, generate_key
 
 ENV = ROOT / ".env"
-EXAMPLE = ROOT / ".env.example"
+EXAMPLE = BUNDLE / ".env.example"
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -120,5 +120,7 @@ def run() -> int:
         except Exception as e:  # noqa: BLE001
             print(f"  [FAILED] Login test failed: {config.redact(str(e))}")
             print("    You can fix the details by running SETUP again, or send this message to IT.")
-    print("\nSetup complete. Double-click START to open the tool.\n")
+    from .config import FROZEN
+    print("\nSetup complete. " + ("The tool opens next; later, double-click ContractNoteExtractor.exe."
+                                  if FROZEN else "Double-click START to open the tool.") + "\n")
     return 0

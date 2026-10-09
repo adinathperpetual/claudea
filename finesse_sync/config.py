@@ -8,12 +8,17 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+FROZEN = bool(getattr(sys, "frozen", False))
+# ROOT holds the user's files (.env, data/). In the .exe build that is the folder of the
+# .exe; the program's own files (index.html, .env.example) are unpacked to BUNDLE.
+ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
 load_dotenv(ROOT / ".env")
 
 

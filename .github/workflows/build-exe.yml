@@ -1,0 +1,38 @@
+name: Build Windows exe
+
+on:
+  push:
+    branches: [main, master, "claude/**"]
+    paths:
+      - "finesse_sync/**"
+      - "index.html"
+      - ".env.example"
+      - "requirements.txt"
+      - "packaging/exe/**"
+      - ".github/workflows/build-exe.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: Build
+        run: python packaging/exe/build_exe.py
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          & "dist/exe/ContractNoteExtractor/ContractNoteExtractor.exe" genkey
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ContractNoteExtractor-exe
+          path: dist/exe/
+          retention-days: 30

@@ -47,6 +47,18 @@ If you try to add a password that equals the client's PAN, it is rejected becaus
 
 Mac/Linux: run `./setup.sh`, then `./start.sh`. The manual steps below do the same thing by hand.
 
+## Windows .exe (no Python needed)
+
+`ContractNoteExtractor-exe.zip` holds a folder with **ContractNoteExtractor.exe**. Unzip it to a permanent
+place such as `C:\ContractNoteExtractor` and double-click the .exe. The first run asks for the Finesse
+login, then opens the tool; later runs open the tool straight away. `.env` and `data\` are kept next to
+the .exe. The helper files `SETUP.bat`, `TEST_LOGIN.bat`, `SYNC_NOW.bat` and `AUTOSTART_ON/OFF.bat` work
+as above. Finesse is read with the Microsoft Edge (or Google Chrome) already on the PC.
+
+To build it: the **Build Windows exe** GitHub Action builds it on every push and offers it as a
+download on the run's page. On a Windows PC that has run SETUP.bat, **BUILD_EXE.bat** does the same
+(`packaging/exe/build_exe.py`, PyInstaller).
+
 ## Setup by hand (Windows or Linux, Python 3.10+)
 
 ```bash

@@ -1,0 +1,31 @@
+CONTRACT NOTE EXTRACTOR  -  .EXE VERSION  (no Python needed)
+=============================================================
+
+FIRST TIME (Admin, once per PC)
+  1. Unzip this folder somewhere permanent, e.g. C:\ContractNoteExtractor
+     (not on the Desktop of a shared login, not inside Downloads).
+  2. Double-click ContractNoteExtractor.exe
+     - It asks for the Finesse User ID, Password and PAN, creates the keys,
+       and tests the login. Answer Y to the test.
+     - Then the tool opens in the browser.
+  3. The access tokens and the key backup are saved in data\ACCESS_TOKENS.txt.
+     Keep that file private and keep a copy of the key somewhere safe.
+  4. Optional: double-click AUTOSTART_ON.bat so the tool starts with Windows
+     and the 08:00 daily sync keeps running.
+
+EVERY DAY
+  Double-click ContractNoteExtractor.exe and keep the black window open
+  while you work. Closing it stops the tool.
+
+OTHER BUTTONS
+  SETUP.bat         change the Finesse login / settings
+  TEST_LOGIN.bat    check the Finesse login
+  SYNC_NOW.bat      fetch the client list from Finesse now
+  AUTOSTART_OFF.bat stop starting with Windows
+
+NOTES
+  * Reading Finesse uses Microsoft Edge (or Google Chrome) already on the PC.
+  * Windows may say "Windows protected your PC" the first time because the
+    .exe is not signed: click "More info" then "Run anyway".
+  * Your settings (.env) and data (data\) stay next to the .exe. To move to
+    a new version, unzip it into the same folder and keep .env and data\.
