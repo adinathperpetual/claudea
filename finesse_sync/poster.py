@@ -643,7 +643,9 @@ def _phase_upload(job_id: int, b: BrowserSession, data: bytes, file_name: str, r
                 kind = "unmapped"
             else:
                 kind = "new"
-            cands.append({"id": f"{a}#{k}", "kind": kind, "row": asdict(t), "label": t.label()})
+            # the stock name as Finesse shows it in Equity Staging ("Broker Scrip Name")
+            name = next((x["scrip"] for x in all_rows if _matches(x, t) and x.get("scrip")), "")
+            cands.append({"id": f"{a}#{k}", "kind": kind, "row": asdict(t), "label": t.label(), "name": name})
         result["accounts"][a] = {"client": mine[0].client, "candidates": cands}
     clock.lap("Uploaded rows found in staging")
     result["timings"] = {"upload_phase": clock.steps, "upload_total": clock.total()}
