@@ -56,7 +56,7 @@ the .exe. The helper files `SETUP.bat`, `TEST_LOGIN.bat`, `SYNC_NOW.bat` and `AU
 as above. Finesse is read with the Microsoft Edge (or Google Chrome) already on the PC.
 
 To build it: the **Build Windows exe** GitHub Action builds it on every push and offers it as a
-download on the run's page. On a Windows PC that has run SETUP.bat, **BUILD_EXE.bat** does the same
+download on the run's page. On any Windows PC with Python 3.10+, **BUILD_EXE.bat** does the same
 (`packaging/exe/build_exe.py`, PyInstaller).
 
 ## Setup by hand (Windows or Linux, Python 3.10+)

@@ -20,3 +20,8 @@ EVERY DAY:
 
 Full SOP: see the SOP document shared with this tool (can be printed / saved as PDF).
 Never share .env, data\ACCESS_TOKENS.txt or the data folder.
+
+BUILDING THE .EXE VERSION (optional, IT/Admin):
+  Double-click BUILD_EXE.bat on any Windows PC with Python 3.10+.
+  It makes dist\ContractNoteExtractor-exe.zip - unzip that on the PCs that
+  should run the tool without Python and double-click ContractNoteExtractor.exe.
