@@ -47,11 +47,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
-          name: ContractNoteExtractor-exe
-          path: dist/exe/
+          name: ContractNoteExtractor-Setup
+          path: dist/ContractNoteExtractor-Setup.exe
           retention-days: 30
-      - name: Source zips
-        run: python packaging/make_zips.py
       - name: Publish on the "latest" download page (GitHub Release)
         shell: bash
         env:
@@ -59,10 +57,8 @@ jobs:
         run: |
           TAG=latest
           NOTES="Built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7} on $(date -u +%Y-%m-%d).
-          ContractNoteExtractor-Setup.exe = Windows installer: double-click, Next, Next, Install (recommended).
-          ContractNoteExtractor-exe.zip = the same Windows program, no Python needed (unzip, double-click ContractNoteExtractor.exe).
-          ContractNoteExtractor.zip = Python version (SETUP.bat, START.bat).
-          ContractNoteExtractor-exe-build-kit.zip = BUILD_EXE.bat and what it needs to build the .exe yourself."
+          Download ContractNoteExtractor-Setup.exe, double-click it and click Next > Install.
+          It installs the tool, adds Start-menu and desktop shortcuts and opens it. No Python needed."
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" --target "$GITHUB_SHA" --title "Contract Note Extractor - latest" --notes "$NOTES" \
-            dist/ContractNoteExtractor-Setup.exe dist/ContractNoteExtractor-exe.zip dist/ContractNoteExtractor.zip dist/ContractNoteExtractor-exe-build-kit.zip
+            dist/ContractNoteExtractor-Setup.exe

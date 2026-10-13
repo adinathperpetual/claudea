@@ -47,24 +47,19 @@ If you try to add a password that equals the client's PAN, it is rejected becaus
 
 Mac/Linux: run `./setup.sh`, then `./start.sh`. The manual steps below do the same thing by hand.
 
-## Windows .exe (no Python needed)
+## Windows installer (no Python needed)
 
-**Installer (recommended):** run **ContractNoteExtractor-Setup.exe** and click Next → Install. It installs for the
-current Windows user (no admin rights), adds Start-menu and desktop shortcuts, can start the tool with Windows,
-and opens it at the end. Running a newer Setup installs over the old one and keeps `.env` and `data\`;
-uninstalling also leaves them. The build makes the installer when Inno Setup 6 is installed
-(`packaging/installer/ContractNoteExtractor.iss`).
+Run **ContractNoteExtractor-Setup.exe** and click Next → Install. It installs for the current Windows user
+(no admin rights; default folder `%LOCALAPPDATA%\Programs\Contract Note Extractor`, changeable on the folder
+page), adds Start-menu and desktop shortcuts, can start the tool with Windows, and opens it at the end.
+The first start asks for the Finesse login. `.env` and `data\` live in the install folder; running a newer
+Setup installs over the old one and keeps them, and uninstalling leaves them too. Finesse is read with the
+Microsoft Edge (or Google Chrome) already on the PC.
 
-
-`ContractNoteExtractor-exe.zip` holds a folder with **ContractNoteExtractor.exe**. Unzip it to a permanent
-place such as `C:\ContractNoteExtractor` and double-click the .exe. The first run asks for the Finesse
-login, then opens the tool; later runs open the tool straight away. `.env` and `data\` are kept next to
-the .exe. The helper files `SETUP.bat`, `TEST_LOGIN.bat`, `SYNC_NOW.bat` and `AUTOSTART_ON/OFF.bat` work
-as above. Finesse is read with the Microsoft Edge (or Google Chrome) already on the PC.
-
-To build it: the **Build Windows exe** GitHub Action builds it on every push and offers it as a
-download on the run's page. On any Windows PC with Python 3.10+, **BUILD_EXE.bat** does the same
-(`packaging/exe/build_exe.py`, PyInstaller).
+To build it: the **Build Windows exe** GitHub Action builds it on every push and publishes it on the
+`latest` release. On any Windows PC with Python 3.10+, **BUILD_EXE.bat** does the same: PyInstaller
+(`packaging/exe/build_exe.py`) then Inno Setup 6 (`packaging/installer/ContractNoteExtractor.iss`, installed
+automatically with winget when missing).
 
 ## Setup by hand (Windows or Linux, Python 3.10+)
 

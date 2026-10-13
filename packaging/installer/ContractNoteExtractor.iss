@@ -18,6 +18,7 @@ AppPublisher=Perpetual Investments
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+DisableDirPage=no
 PrivilegesRequired=lowest
 OutputDir=..\..\dist
 OutputBaseFilename=ContractNoteExtractor-Setup

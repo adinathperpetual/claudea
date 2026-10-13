@@ -1,11 +1,11 @@
-"""Build ContractNoteExtractor.exe (Windows) with PyInstaller.
+"""Build the Windows installer dist/ContractNoteExtractor-Setup.exe.
 
     python packaging/exe/build_exe.py
 
-Output: dist/exe/ContractNoteExtractor/ (the .exe + its _internal folder + helper .bat
-files), dist/ContractNoteExtractor-exe.zip and, when Inno Setup 6 is installed, the
-one-file Windows installer dist/ContractNoteExtractor-Setup.exe. Build on Windows to get a Windows .exe —
-PyInstaller does not cross-compile. No Python is needed on the PCs that run the result.
+PyInstaller first makes the program in dist/exe/ContractNoteExtractor/ (the .exe, its
+_internal folder and the helper .bat files); Inno Setup 6 then packs that folder into the
+one-file installer. Build on Windows (PyInstaller does not cross-compile). No Python is
+needed on the PCs that install the result.
 """
 from __future__ import annotations
 
@@ -46,9 +46,7 @@ def main() -> int:
     app = out / NAME
     for f in (HERE / "extras").iterdir():
         shutil.copy2(f, app / f.name)
-    zip_base = ROOT / "dist" / f"{NAME}-exe"
-    shutil.make_archive(str(zip_base), "zip", root_dir=out, base_dir=NAME)
-    print(f"\nBuilt {app}\nZip   {zip_base}.zip")
+    print(f"\nBuilt {app}")
     return build_installer()
 
 
@@ -66,13 +64,13 @@ def _iscc() -> str | None:
 
 def build_installer() -> int:
     if sys.platform != "win32":
+        print("The installer can only be made on Windows.")
         return 0
     iscc = _iscc()
     if not iscc:
-        print("\nInno Setup 6 is not installed, so no installer was made (the .exe zip is ready).\n"
-              "Install it from https://jrsoftware.org/isdl.php and run this again to get\n"
-              "dist\\ContractNoteExtractor-Setup.exe.")
-        return 0
+        print("\nInno Setup 6 is not installed, so the installer could not be made.\n"
+              "Install it from https://jrsoftware.org/isdl.php and run this again.")
+        return 1
     version = os.environ.get("CNE_VERSION") or date.today().strftime("%Y.%m.%d")
     subprocess.run([iscc, f"/DAppVersion={version}", str(ROOT / "packaging" / "installer" / "ContractNoteExtractor.iss")],
                    check=True)
