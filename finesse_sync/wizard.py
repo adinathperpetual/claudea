@@ -119,8 +119,8 @@ def run() -> int:
             print("  [OK] Finesse login OK.")
         except Exception as e:  # noqa: BLE001
             print(f"  [FAILED] Login test failed: {config.redact(str(e))}")
-            print("    You can fix the details by running SETUP again, or send this message to IT.")
+            print("    Fix the details with Start menu > Change Finesse login, or send this message to IT.")
     from .config import FROZEN
-    print("\nSetup complete. " + ("The tool opens next; later, double-click ContractNoteExtractor.exe."
-                                  if FROZEN else "Double-click START to open the tool.") + "\n")
+    print("\nSetup complete. " + ("The tool opens next; later, use the Contract Note Extractor shortcut."
+                                  if FROZEN else "Start it with: python -m finesse_sync serve --open") + "\n")
     return 0

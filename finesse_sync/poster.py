@@ -21,12 +21,12 @@ import logging
 import re
 import threading
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 
 from . import db
 from .config import get_settings, redact
-from .finesse import BrowserSession, FinesseClient, FinesseError
+from .finesse import BrowserSession, FinesseClient
 from .records import LayoutChangedError
 
 log = logging.getLogger("finesse_sync.poster")

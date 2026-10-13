@@ -2,8 +2,8 @@
 
     python packaging/exe/build_exe.py
 
-PyInstaller first makes the program in dist/exe/ContractNoteExtractor/ (the .exe, its
-_internal folder and the helper .bat files); Inno Setup 6 then packs that folder into the
+PyInstaller first makes the program in dist/exe/ContractNoteExtractor/ (the .exe and its
+_internal folder); Inno Setup 6 then packs that folder into the
 one-file installer. Build on Windows (PyInstaller does not cross-compile). No Python is
 needed on the PCs that install the result.
 """
@@ -44,10 +44,7 @@ def main() -> int:
         "--exclude-module", "matplotlib",
         "--exclude-module", "pytest",
     ])
-    app = out / NAME
-    for f in (HERE / "extras").iterdir():
-        shutil.copy2(f, app / f.name)
-    print(f"\nBuilt {app}")
+    print(f"\nBuilt {out / NAME}")
     return build_installer()
 
 

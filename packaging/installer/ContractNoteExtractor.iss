@@ -1,7 +1,8 @@
 ; Windows installer for Contract Note Extractor (Inno Setup 6).
 ; Built by packaging/exe/build_exe.py after the .exe, or:  ISCC packaging\installer\ContractNoteExtractor.iss
-; Installs per user (no admin rights), so the tool can write .env and data\ next to the .exe.
-; Upgrades install over the old version and keep .env and data\; uninstall keeps them too.
+; Program files go to C:\Program Files\Contract Note Extractor. Settings (.env) and data\ go to
+; C:\ProgramData\Contract Note Extractor, writable for every user of the PC; upgrades and
+; uninstall leave them in place.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -9,6 +10,7 @@
 #define AppName "Contract Note Extractor"
 #define AppExe "ContractNoteExtractor.exe"
 #define SrcDir "..\..\dist\exe\ContractNoteExtractor"
+#define DataDir "{commonappdata}\Contract Note Extractor"
 
 [Setup]
 AppId={{6B0E3C1A-6C55-4B8B-9E0B-3C2F6D1E7A41}
@@ -19,7 +21,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=no
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 OutputDir=..\..\dist
 OutputBaseFilename=ContractNoteExtractor-Setup
 Compression=lzma2/max
@@ -35,22 +37,24 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 Name: "autostart"; Description: "Start the tool when Windows starts (keeps the 08:00 Finesse sync running)"; GroupDescription: "Start-up:"; Flags: unchecked
 
+[Dirs]
+Name: "{#DataDir}"; Permissions: users-modify; Flags: uninsneveruninstall
+
 [Files]
 Source: "{#SrcDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
-Name: "{group}\Change Finesse login (setup)"; Filename: "{app}\{#AppExe}"; Parameters: "setup"; WorkingDir: "{app}"
-Name: "{group}\Test Finesse login"; Filename: "{app}\TEST_LOGIN.bat"; WorkingDir: "{app}"
-Name: "{group}\Sync clients from Finesse now"; Filename: "{app}\SYNC_NOW.bat"; WorkingDir: "{app}"
-Name: "{group}\Access tokens and key backup"; Filename: "{app}\data\ACCESS_TOKENS.txt"
-Name: "{group}\Read me first"; Filename: "{app}\START_HERE.txt"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{#DataDir}"
+Name: "{group}\Change Finesse login"; Filename: "{app}\{#AppExe}"; Parameters: "setup --pause"; WorkingDir: "{#DataDir}"
+Name: "{group}\Test Finesse login"; Filename: "{app}\{#AppExe}"; Parameters: "test-login --pause"; WorkingDir: "{#DataDir}"
+Name: "{group}\Sync clients from Finesse now"; Filename: "{app}\{#AppExe}"; Parameters: "sync --pause"; WorkingDir: "{#DataDir}"
+Name: "{group}\Settings and data folder"; Filename: "{#DataDir}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "serve"; WorkingDir: "{app}"; Flags: runminimized; Tasks: autostart
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{#DataDir}"; Tasks: desktopicon
+Name: "{commonstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "serve"; WorkingDir: "{#DataDir}"; Flags: runminimized; Tasks: autostart
 
 [Run]
-Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "Open {#AppName} now (the first time it asks for the Finesse login)"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExe}"; WorkingDir: "{#DataDir}"; Description: "Open {#AppName} now (the first time it asks for the Finesse login)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"

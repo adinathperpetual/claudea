@@ -10,7 +10,6 @@ on:
       - "requirements.txt"
       - "packaging/**"
       - "BUILD_EXE.bat"
-      - "START_HERE.txt"
       - ".github/workflows/build-exe.yml"
   workflow_dispatch:
 
@@ -43,7 +42,7 @@ jobs:
       - name: Smoke test
         shell: pwsh
         run: |
-          & "dist/exe/ContractNoteExtractor/ContractNoteExtractor.exe" genkey
+          & "dist/exe/ContractNoteExtractor/ContractNoteExtractor.exe" --help
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:

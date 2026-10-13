@@ -48,11 +48,11 @@ class Cipher:
     def __init__(self, key: str | None = None):
         key = key if key is not None else get_settings().encryption_key
         if not key:
-            raise ConfigError("CNE_ENCRYPTION_KEY is not set. Generate one with: python -m finesse_sync genkey")
+            raise ConfigError("CNE_ENCRYPTION_KEY is not set. Run the setup again to create one")
         try:
             self._f = Fernet(key.encode())
         except (ValueError, TypeError) as e:
-            raise ConfigError("CNE_ENCRYPTION_KEY is not a valid Fernet key (python -m finesse_sync genkey)") from e
+            raise ConfigError("CNE_ENCRYPTION_KEY is not a valid Fernet key (run the setup again)") from e
 
     def encrypt(self, plain: str | None) -> str | None:
         if plain is None or plain == "":

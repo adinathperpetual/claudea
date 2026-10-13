@@ -3,7 +3,7 @@
 *.env
 !.env.example
 
-# Local data (SQLite DB, encrypted session cookies, discovery dumps, logs)
+# Local data (SQLite DB, encrypted session cookies, logs)
 data/
 *.db
 *.sqlite3

@@ -15,10 +15,31 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 FROZEN = bool(getattr(sys, "frozen", False))
-# ROOT holds the user's files (.env, data/). In the .exe build that is the folder of the
-# .exe; the program's own files (index.html, .env.example) are unpacked to BUNDLE.
-ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
-BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
+APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+# Program files (index.html, .env.example). In the installed .exe they sit under Program Files.
+BUNDLE = Path(getattr(sys, "_MEIPASS", APP_DIR))
+
+
+def _user_root() -> Path:
+    """Where .env and data/ live. Installed: C:\\ProgramData\\Contract Note Extractor (Program
+    Files is read-only for normal users); from source: the project folder."""
+    if not FROZEN:
+        return APP_DIR
+    root = Path(os.environ.get("ProgramData") or r"C:\ProgramData") / "Contract Note Extractor"
+    root.mkdir(parents=True, exist_ok=True)
+    if not (root / ".env").exists():          # move settings + data from an earlier install
+        import shutil
+        old_dirs = [APP_DIR, Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Contract Note Extractor"]
+        for old in old_dirs:
+            if (old / ".env").is_file():
+                shutil.copy2(old / ".env", root / ".env")
+                if (old / "data").is_dir() and not (root / "data").exists():
+                    shutil.copytree(old / "data", root / "data")
+                break
+    return root
+
+
+ROOT = _user_root()
 load_dotenv(ROOT / ".env")
 
 DEFAULT_PORT = 8766

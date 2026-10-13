@@ -388,15 +388,12 @@ def launch_browser(pw, executable_path: str, headless: bool):
 
 
 class BrowserSession:
-    """Thin Playwright wrapper used for login, the table-scraping fallback and `discover`."""
+    """Thin Playwright wrapper used for login, the report download and the table-scraping fallback."""
 
-    def __init__(self, settings: Settings, session: SessionState | None = None, headless: bool | None = None,
-                 capture: bool = False):
+    def __init__(self, settings: Settings, session: SessionState | None = None, headless: bool | None = None):
         self.s = settings
         self.initial = session
         self.headless = settings.finesse_headless if headless is None else headless
-        self.capture = capture
-        self.captured: list[dict] = []
         self.bearer = session.bearer if session else ""
 
     def __enter__(self):
@@ -424,8 +421,6 @@ class BrowserSession:
         self.page = self.ctx.new_page()
         host = urlparse(self.s.finesse_base_url).hostname or ""
         self.page.on("request", lambda req: self._on_request(req, host))
-        if self.capture:
-            self.page.on("response", self._on_response)
         return self
 
     def __exit__(self, *exc):
@@ -441,35 +436,6 @@ class BrowserSession:
                 auth = req.headers.get("authorization", "")
                 if auth.lower().startswith("bearer "):
                     self.bearer = auth
-        except Exception:  # noqa: BLE001
-            pass
-
-    def _on_response(self, resp) -> None:
-        try:
-            req = resp.request
-            if req.resource_type not in ("xhr", "fetch", "document", "other"):
-                return
-            entry = {"url": resp.url, "method": req.method, "status": resp.status,
-                     "content_type": resp.headers.get("content-type", ""), "resource_type": req.resource_type}
-            pd = req.post_data or ""
-            entry["post_data"] = redact(pd)[:2000] if pd else ""
-            if "json" in entry["content_type"]:
-                try:
-                    body = resp.json()
-                    rows = find_records_in_json(body)
-                    entry["records_found"] = len(rows)
-                    if rows:
-                        entry["sample_keys"] = list(rows[0].keys())[:40]
-                        try:
-                            detect_columns(entry["sample_keys"])
-                            entry["looks_like_client_list"] = True
-                        except LayoutChangedError:
-                            entry["looks_like_client_list"] = False
-                    if isinstance(body, dict):
-                        entry["top_level_keys"] = list(body.keys())[:40]
-                except Exception:  # noqa: BLE001
-                    pass
-            self.captured.append(entry)
         except Exception:  # noqa: BLE001
             pass
 
@@ -500,29 +466,6 @@ class BrowserSession:
                     el = loc.nth(i)
                     if el.is_visible():
                         return el
-            except Exception:  # noqa: BLE001
-                continue
-        return None
-
-    def _input_matching(self, rx: re.Pattern, exclude_password: bool = True):
-        inputs = self.page.locator("input")
-        for i in range(min(inputs.count(), 40)):
-            el = inputs.nth(i)
-            try:
-                if not el.is_visible():
-                    continue
-                typ = (el.get_attribute("type") or "text").lower()
-                if typ in ("hidden", "checkbox", "radio", "submit", "button") or (exclude_password and typ == "password"):
-                    continue
-                attrs = " ".join(filter(None, [el.get_attribute(a) for a in ("name", "id", "placeholder", "aria-label", "formcontrolname", "autocomplete")]))
-                label = ""
-                eid = el.get_attribute("id")
-                if eid:
-                    lab = self.page.locator(f'label[for="{eid}"]')
-                    if lab.count():
-                        label = lab.first.inner_text()
-                if rx.search(attrs) or rx.search(label):
-                    return el
             except Exception:  # noqa: BLE001
                 continue
         return None
@@ -756,7 +699,7 @@ class BrowserSession:
                 raise LoginError("Finesse login did not complete (logged-in marker FINESSE_SEL_LOGGED_IN not found).")
         elif self._password_visible():
             raise LoginError("Finesse login failed — still on the login page. Check the Finesse User ID, Password and PAN "
-                             "(run SETUP.bat again to correct them).")
+                             "(run the setup again — Start menu > Change Finesse login — to correct them).")
 
     # ---- Client Master Report (Reports > Corporate Reports > Other Reports > report > Generate)
     def _click_text(self, text: str, wait_s: float = 15) -> bool:
@@ -771,8 +714,8 @@ class BrowserSession:
                     try:
                         if not el.is_visible():
                             continue
-                        target = el.locator(f"xpath=ancestor-or-self::*[self::a or self::button or @role='menuitem' "
-                                            f"or @role='tab' or @role='button' or self::mat-expansion-panel-header][1]")
+                        target = el.locator("xpath=ancestor-or-self::*[self::a or self::button or @role='menuitem' "
+                                            "or @role='tab' or @role='button' or self::mat-expansion-panel-header][1]")
                         (target.first if target.count() else el).click()
                         self.page.wait_for_timeout(800)
                         return True
