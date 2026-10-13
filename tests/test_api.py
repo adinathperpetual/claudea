@@ -53,3 +53,37 @@ def test_import_endpoint_and_logs():
         assert logs and logs[0]["status"] == "success"
         st = c.get("/api/sync/status", headers=ADMIN).json()
         assert st["counts"]["exceptional"] == 1 and st["last_success_at"]
+
+
+def _locked_pdf(password: str) -> bytes:
+    import io
+
+    from pypdf import PdfWriter
+    w = PdfWriter()
+    w.add_blank_page(200, 200)
+    w.encrypt(password, algorithm="AES-256")
+    out = io.BytesIO()
+    w.write(out)
+    return out.getvalue()
+
+
+def test_unlock_tries_every_client_pan():
+    with client() as c:
+        def unlock(data, name):
+            return c.post("/api/passwords/unlock", params={"file_name": name}, headers=EXTR,
+                          files={"file": (name, data, "application/pdf")})
+        # file name names nobody ("FCBL"), but the PDF opens with RAVI KUMAR's PAN
+        r = unlock(_locked_pdf("DEFPK4567N"), "09-OCT-2026_FCBL.pdf").json()
+        assert r["password"] == "DEFPK4567N" and r["trading_code"] == "T2" and r["source"] == "pan"
+        assert r["client_name"] == "RAVI KUMAR"
+        # lowercase PAN variant
+        assert unlock(_locked_pdf("abcpj1234k"), "x.pdf").json()["source"] == "pan_lowercase"
+        # exceptional password of another client
+        c.post("/api/exceptional", headers=ADMIN, json={"trading_code": "T1", "password": "gj@2026"})
+        r = unlock(_locked_pdf("gj@2026"), "random.pdf").json()
+        assert r["password"] == "gj@2026" and r["trading_code"] == "T1" and r["source"] == "exceptional"
+        # nothing opens it: no password, but how many clients were checked
+        r = unlock(_locked_pdf("nobody-knows"), "a_SURAJ SIPANI.pdf").json()
+        assert r["password"] is None and r["client_count"] == 2
+        assert unlock(b"not a pdf", "a.pdf").status_code == 400
+        assert c.post("/api/passwords/unlock", files={"file": ("a.pdf", b"x")}).status_code == 401

@@ -2256,10 +2256,22 @@ async function processOne(p){
   // tried first (all of them), then any passwords entered manually this session.
   // Client Master service (Finesse) first: exceptional password(s) for the client,
   // else the default rule (PAN). Falls back silently if the service is unreachable.
+  await fsReady;   // let the Client Master service connect before the first file
   const tryList = [...await serverPasswords(p.name), ...passwordsForFile(p.name), ...state.passwords];
   try { opened = await openPdf(p.bytes, tryList); }
   catch(e){ return { ...base, status:"warn", note:"Could not read PDF" }; }
-  if (!opened) return { ...base, status:"lock" };
+  let lockNote = "";
+  if (!opened){
+    // The file name did not lead to the right client: let the service try every
+    // client's password (PAN) from the Client Master against this PDF.
+    const u = await serverUnlock(p);
+    if (u.password){
+      try { opened = await openPdf(p.bytes, [u.password]); } catch(e){}
+      if (opened && u.client_name) p.unlockedFor = u.client_name;
+    }
+    if (!opened) lockNote = u.why;
+  }
+  if (!opened) return { ...base, status:"lock", note:lockNote };
   return await extractFrom(p, opened);
 }
 
@@ -2292,7 +2304,7 @@ async function extractFrom(p, opened){
       : reason === "no-columns" ? "Table found, columns unclear"
       : "Table found, no rows matched";
     return { ...base,
-      broker: detectBroker(fullText), client: findClientName(lines), tradeDate: findTradeDate(lines),
+      broker: detectBroker(fullText), client: findClientName(lines) || p.unlockedFor || "", tradeDate: findTradeDate(lines),
       trades, diag, note, ocr: usedOcr, status: trades.length ? "ok" : "warn",
       lines: lines.slice(0, 500).map(l => l.text),
     };
@@ -3466,6 +3478,20 @@ async function serverPasswords(fileName){
     return Array.isArray(r.passwords) ? r.passwords : [];
   } catch(e){ return []; }
 }
+// Locked PDF the file name could not unlock: the service tries every Client Master
+// password against it and returns the one that opens it (never throws).
+async function serverUnlock(p){
+  if (!fs.up) return { why: (fs.ext || fs.adm) ? "Client Master service not reachable — only the local passwords were tried"
+                                               : "Client Master not connected — only the local passwords were tried" };
+  try{
+    const form = new FormData();
+    form.append("file", new Blob([p.bytes.slice(0)], { type:"application/pdf" }), p.name);
+    const r = await fsFetch("/api/passwords/unlock?file_name=" + encodeURIComponent(p.name), { method:"POST", form, timeout:60000 });
+    if (r.password) return r;
+    if (!r.client_count) return { why: "Client Master has no clients yet — run Sync from Finesse" };
+    return { why: `None of the ${r.client_count} Client Master clients' PANs or saved passwords opens this file — add its password as an exceptional password` };
+  } catch(e){ return { why: "Password lookup failed: " + e.message }; }
+}
 // Local master + Finesse directory (name -> trading code) for the Trading Account column.
 function masterForMatching(){
   if (!fs.dir.length) return state.master;
@@ -3483,6 +3509,7 @@ function fsForgetAdmin(){
   if (fs.poll){ clearInterval(fs.poll); fs.poll = null; }
 }
 
+var fsReady = Promise.resolve();
 async function fsInit(){
   $("#fsUrl").value = fs.url; $("#fsExtToken").value = fs.ext ? "••••••••" : ""; $("#fsAdmToken").value = "";
   if (!fs.ext && !fs.adm){ fs.up = false; fsSetStatus("", "Not connected — using the local master only"); fsShowMain(false); return; }
@@ -3930,7 +3957,7 @@ function applyRole(){
   const g=$("#dataCardsGrid"); if (g) g.style.display = admin ? "" : "none";
   const a=$("#adminGrid"); if (a) a.style.display = "none";   // hidden until the header "Users" button is clicked
   const ul=$("#usersLink"); if (ul) ul.style.display = admin ? "" : "none";
-  fsInit();
+  fsReady = fsInit().catch(() => {});
 }
 /* users */
 function renderUsers(){

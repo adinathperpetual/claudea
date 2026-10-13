@@ -8,3 +8,4 @@ pandas>=2.1
 openpyxl>=3.1
 python-multipart>=0.0.9
 playwright>=1.44
+pypdf>=4.0

@@ -37,6 +37,7 @@ def main() -> int:
         "--add-data", f"{ROOT / '.env.example'}{SEP}.",
         "--collect-submodules", "finesse_sync",
         "--collect-all", "playwright",
+        "--collect-submodules", "pypdf",
         "--hidden-import", "apscheduler.triggers.cron",
         "--hidden-import", "apscheduler.schedulers.background",
         "--exclude-module", "tkinter",

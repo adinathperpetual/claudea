@@ -216,3 +216,76 @@ def resolve_passwords(cipher: Cipher, file_name: str = "", trading_code: str = "
                     sources.append("default")
     return {"matched_by": how, "clients": matched, "passwords": passwords, "sources": sources}
 
+
+
+# ---------------------------------------------------------------- unlock a PDF
+def unlock_pdf(cipher: Cipher, data: bytes, file_name: str = "") -> dict:
+    """Find the password of a locked contract note when the file name did not lead to
+    the client: try the client(s) matched from the file name first, then every
+    exceptional password and every client's PAN (uppercase, then lowercase) against the
+    PDF itself. Only the password that actually opens this PDF is returned."""
+    import io
+
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except Exception as e:  # noqa: BLE001
+        raise MasterError("Not a readable PDF.") from e
+    with db.connect() as c:
+        clients = db.all_clients(c)
+        exc_rows = db.exceptional_rows(c)
+    out = {"password": None, "trading_code": "", "client_name": "", "source": "", "checked": 0,
+           "client_count": len(clients)}
+    if not reader.is_encrypted:
+        return {**out, "password": "", "source": "not_encrypted"}
+
+    tried: set[str] = set()
+
+    def opens(pw: str) -> bool:
+        if not pw or pw in tried:
+            return False
+        tried.add(pw)
+        try:
+            return bool(reader.decrypt(pw))
+        except Exception:  # noqa: BLE001  (bad padding, unsupported filter, ...)
+            return False
+
+    def hit(pw: str, code: str, source: str) -> dict:
+        cl = clients.get(code)
+        name = cl["client_name"] if cl else next((r["client_name"] for r in exc_rows if r["trading_code"] == code), "")
+        return {**out, "password": pw, "trading_code": code, "client_name": name or "", "source": source,
+                "checked": len(tried)}
+
+    hinted = resolve_passwords(cipher, file_name)
+    codes = [m["trading_code"] for m in hinted["clients"]]
+    for pw in hinted["passwords"]:
+        if opens(pw):
+            return hit(pw, codes[0] if len(codes) == 1 else "", "file_name")
+
+    for r in exc_rows:
+        try:
+            pw = cipher.decrypt(r["password_enc"])
+        except Exception:  # noqa: BLE001
+            continue
+        if opens(pw):
+            return hit(pw, r["trading_code"], "exceptional")
+
+    order = sorted(clients, key=lambda k: (not clients[k]["active"], k))   # active clients first
+    pans: list[tuple[str, str]] = []
+    for code in order:
+        if not clients[code]["pan_enc"]:
+            continue
+        try:
+            pan = cipher.decrypt(clients[code]["pan_enc"])
+        except Exception:  # noqa: BLE001
+            continue
+        if is_valid_pan(pan):
+            pans.append((code, default_password(pan)))
+    for code, pw in pans:
+        if opens(pw):
+            return hit(pw, code, "pan")
+    for code, pw in pans:                     # some brokers use the PAN in lowercase
+        if opens(pw.lower()):
+            return hit(pw.lower(), code, "pan_lowercase")
+    return {**out, "checked": len(tried), "matched_by_name": [m["client_name"] for m in hinted["clients"]]}

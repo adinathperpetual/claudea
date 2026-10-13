@@ -153,6 +153,19 @@ def resolve(body: ResolveIn, _role: Role = Depends(auth), c: Cipher = Depends(ci
     return master.resolve_passwords(c, body.file_name, body.trading_code, body.client_name)
 
 
+@app.post("/api/passwords/unlock")
+def unlock(file: UploadFile = File(...), file_name: str = "", _role: Role = Depends(auth), c: Cipher = Depends(cipher)):
+    """Try the Client Master's passwords (every client's PAN included) against a locked PDF.
+    Returns only the password that opens this file."""
+    data = file.file.read(25 * 1024 * 1024 + 1)
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 25 MB).")
+    try:
+        return master.unlock_pdf(c, data, file_name or file.filename or "")
+    except master.MasterError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.get("/api/directory")
 def get_directory(_role: Role = Depends(auth)):
     return {"clients": master.directory()}
