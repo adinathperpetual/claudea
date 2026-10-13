@@ -214,7 +214,8 @@ def start(data: bytes, file_name: str, user: str = "") -> int:
     open) for confirm()/cancel(). Nothing is posted without confirm()."""
     rows = rows_from_template(data)        # validate before touching Finesse
     _init()
-    if not _lock.acquire(blocking=False):
+    # a lot that was just closed ("Don't post" / a new lot chosen) needs a moment to close its browser
+    if not _lock.acquire(timeout=30):
         raise PostError("Another upload to Finesse is running — wait for it to finish.")
     ts = db.now_iso()
     with db.connect() as c:

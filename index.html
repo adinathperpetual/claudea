@@ -481,7 +481,11 @@
     <section class="card">
       <div class="card-head">
         <h2><span class="num-chip">1</span> Contract notes</h2>
-        <span class="ct" id="pdfCount">0 files</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="ct" id="pdfCount">0 files</span>
+          <button class="btn" id="clearPdfs" style="padding:5px 12px;font-size:12.5px" disabled
+                  title="Remove all contract notes and their extracted records">Clear all</button>
+        </span>
       </div>
       <div class="card-body">
         <div class="drop" id="drop">
@@ -866,7 +870,18 @@ function renderPdfChips(){
     chip.append(rm); box.append(chip);
   });
   $("#pdfCount").textContent = state.pdfs.length + (state.pdfs.length===1?" file":" files");
+  $("#clearPdfs").disabled = !state.pdfs.length;
 }
+// Remove every contract note and the records extracted from them (a fresh lot).
+$("#clearPdfs").onclick = () => {
+  if (!state.pdfs.length) return;
+  if (!confirm(`Remove all ${state.pdfs.length} contract note(s) and their extracted records?`)) return;
+  state.pdfs = []; state.results = []; state.sort = { key: null, dir: 1 };
+  renderPdfChips(); savePdfs();
+  renderResults(); refreshExportButtons(); updateWarnBar(); updateBlockBar(); updateLockBar();
+  try{ delete fpTicks.choose; fpSaveTicks(); }catch(e){}
+  toast("All contract notes cleared. Add the next lot of PDFs.");
+};
 
 /* (Password list module removed — passwords now come from the client master
    by file name; per-file manual unlock still available for locked files.) */
@@ -3828,15 +3843,58 @@ function fpShowJob(j){
   fpOverlay.classList.add("on");
   if (["uploading","posting"].includes(j.status)) fpPoll();
 }
+// A lot = the set of transactions of one upload; compared to tell "previous" from "current".
+const fpLotKey = list => list.map(([a, d, s, q, r]) =>
+  [String(a || "").toUpperCase(), d, s, Number(q).toFixed(4), Number(r).toFixed(2)].join("|")).sort().join(";");
+const fpJobKey = j => fpLotKey(((j && j.data && j.data.rows) || []).map(r => [r.account, r.trade_date, r.side, r.qty, r.rate]));
+const fpRowsKey = rows => fpLotKey(rows.map(r => [r.A, r.C, r.J, r.K, r.L]));
+const fpWhen = iso => { try{ return new Date(iso).toLocaleString(); }catch(e){ return iso || ""; } };
+
+// Previous upload vs the contract notes now on screen: let the person pick the lot.
+function fpLots(prev, rows, left){
+  fpStatus = "lots";
+  const n = ((prev.data && prev.data.rows) || []).length, busy = ["uploading","posting"].includes(prev.status),
+        waiting = prev.status === "awaiting_confirmation";
+  $("#fpBody").innerHTML =
+    `<p class="diagline"><span class="fs-pill partial">Choose the lot</span> The contract notes on screen are not the ones uploaded last time.</p>` +
+    `<div class="failfile"><div class="ftop"><span>🗂</span><span>Previous lot — ${n} transaction(s)</span></div>` +
+      `<div class="fmsg" style="font-family:inherit;color:var(--muted)">Uploaded ${esc(fpWhen(prev.created_at))} · ${esc(FP_LABEL[prev.status] || prev.status)}` +
+      (prev.file_name ? ` · ${esc(prev.file_name)}` : "") + `</div>` +
+      `<div style="margin-top:8px"><button class="btn" id="fpLotPrev">Open previous lot</button></div></div>` +
+    `<div class="failfile"><div class="ftop"><span>🆕</span><span>Current lot — ${rows.length} transaction(s) from the contract notes on screen</span></div>` +
+      (left ? `<div class="fmsg" style="font-family:inherit;color:var(--muted)">${left} without a trading account will be left out.</div>` : "") +
+      (busy ? `<div class="fmsg bad" style="font-family:inherit">The previous lot is still working in Finesse — wait until it finishes.</div>`
+       : waiting ? `<div class="fmsg" style="font-family:inherit;color:var(--muted)">The previous lot is waiting for your OK; choosing the current lot closes it without posting (its rows stay in Equity Staging).</div>` : "") +
+      `<div style="margin-top:8px"><button class="btn green" id="fpLotCur" ${busy ? "disabled" : ""}>Upload current lot (new upload)</button></div></div>`;
+  fpButtons();
+  $("#fpLotPrev").onclick = () => fpShowJob(prev);
+  $("#fpLotCur").onclick = async () => {
+    if (waiting){
+      try{ await fsFetch(`/api/finesse/transactions/jobs/${prev.id}/cancel`, { admin:true, method:"POST" }); } catch(e){}
+      delete fpTicks["job" + prev.id]; fpSaveTicks(); fpCheckActive();
+    }
+    delete fpTicks.choose; fpSaveTicks();
+    fpChoose(rows, left);
+  };
+}
+async function fpLatestJob(){
+  try{ return ((await fsFetch("/api/finesse/transactions/jobs?limit=1", { admin:true, timeout:4000 })).jobs || [])[0] || null; }
+  catch(e){ return null; }
+}
 $("#expFinesse").onclick = async () => {
   if (!fs.up){ toast("Connect the Client Master service first (card 2)."); return; }
   if (!fs.admin){ toast("Enter the admin token in card 2 and click Connect to upload to Finesse."); return; }
-  // A job still in progress or waiting for your OK? Show it straight away, don't start over.
-  const j = await fpCheckActive();
-  if (j){ fpShowJob(j); return; }
-  const all = templateRows(), rows = all.filter(r => r.A);
+  const all = templateRows(), rows = all.filter(r => r.A), left = all.length - rows.length;
+  const [last] = await Promise.all([fpLatestJob(), fpCheckActive()]);
+  // New contract notes on screen and an earlier upload: ask which lot.
+  if (last && rows.length && fpRowsKey(rows) !== fpJobKey(last)){
+    fpLots(last, rows, left); fpOverlay.classList.add("on"); return;
+  }
+  // The same lot still in progress or waiting for your OK? Show it straight away, don't start over.
+  if (fpActive){ fpShowJob(fpActive); return; }
+  if (!rows.length && last){ fpShowJob(last); return; }
   if (!templateReady(rows)) return;
-  fpChoose(rows, all.length - rows.length);
+  fpChoose(rows, left);
   fpOverlay.classList.add("on");
 };
 $("#fpConfirm").onclick = async () => {
