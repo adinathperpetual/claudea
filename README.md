@@ -40,7 +40,7 @@ If you try to add a password that equals the client's PAN, it is rejected becaus
 1. Install Python 3.10+ from python.org and tick **Add python.exe to PATH**.
 2. Double-click **SETUP.bat**. It installs everything, then asks for your Finesse user ID, password and PAN.
    It also creates the keys and saves the tokens to `data/ACCESS_TOKENS.txt`.
-3. Double-click **START.bat**. The tool opens at http://127.0.0.1:8765/ and is already connected for password lookups.
+3. Double-click **START.bat**. The tool opens at http://127.0.0.1:8766/ and is already connected for password lookups.
    An admin pastes the admin token in card 2 to manage the Client Master.
 4. Optional: run **AUTOSTART_ON.bat** so the tool starts with Windows and the 08:00 sync always runs.
    Use **SYNC_NOW.bat** and **TEST_LOGIN.bat** for a manual sync and a login check.
@@ -146,10 +146,10 @@ If Finesse uses different labels, set `FINESSE_FIELD_NAME`, `FINESSE_FIELD_PAN` 
 
 ```bash
 python -m finesse_sync sync       # one sync now; prints the result
-python -m finesse_sync serve      # API + daily schedule, http://127.0.0.1:8765
+python -m finesse_sync serve      # API + daily schedule, http://127.0.0.1:8766
 ```
 
-Open **http://127.0.0.1:8765/** (the service serves the extractor) and sign in as an admin.
+Open **http://127.0.0.1:8766/** (the service serves the extractor) and sign in as an admin.
 Open **2 · Client master** and enter:
 
 - **Extractor token:** saved in this browser so every user can look up passwords.

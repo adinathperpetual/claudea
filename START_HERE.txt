@@ -11,7 +11,7 @@ FIRST TIME (Admin, once):
 
 EVERY DAY:
   1. Double-click START.bat (skip if AUTOSTART is on). Keep the black window open.
-  2. Browser opens http://127.0.0.1:8765/ - sign in (first time: admin / admin,
+  2. Browser opens http://127.0.0.1:8766/ - sign in (first time: admin / admin,
      then choose a new password).
   3. Admin: card 2 > paste Admin token from data\ACCESS_TOKENS.txt > Connect.
      Check 'last synced' is today; if not, click 'Sync from Finesse'.

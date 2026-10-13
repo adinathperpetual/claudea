@@ -512,7 +512,7 @@
           </div>
           <div id="fsConn">
             <div class="u-add">
-              <input type="text" id="fsUrl" placeholder="Service URL (default http://127.0.0.1:8765)" autocomplete="off" />
+              <input type="text" id="fsUrl" placeholder="Service URL (default http://127.0.0.1:8766)" autocomplete="off" />
               <input type="password" id="fsExtToken" placeholder="Extractor token (saved on this device)" autocomplete="off" />
               <input type="password" id="fsAdmToken" placeholder="Admin token (this session only)" autocomplete="off" />
               <button class="btn dark" id="fsConnect">Connect</button>
@@ -3437,7 +3437,7 @@ const fs = { url:"", ext:"", adm:"", up:false, admin:false, dir:[], reveal:false
 function fsBase(){
   if (fs.url) return fs.url.replace(/\/+$/,"");
   // served by the Client Master service itself -> talk to that server; opened as a file -> default port
-  return /^https?:/.test(location.protocol) ? location.origin : "http://127.0.0.1:8765";
+  return /^https?:/.test(location.protocol) ? location.origin : "http://127.0.0.1:8766";
 }
 async function fsFetch(path, { admin=false, method="GET", body=null, form=null, timeout=8000 } = {}){
   const tok = admin ? fs.adm : (fs.ext || fs.adm);

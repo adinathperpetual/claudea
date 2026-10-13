@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("setup")
     sp = sub.add_parser("serve")
     sp.add_argument("--host", default="127.0.0.1")
-    sp.add_argument("--port", type=int, default=8765)
+    sp.add_argument("--port", type=int, default=None, help="default: CNE_PORT in .env, else 8766")
     sp.add_argument("--open", action="store_true", help="open the tool in the default browser")
     sub.add_parser("sync")
     sub.add_parser("test-login")
@@ -67,15 +67,16 @@ def main(argv: list[str] | None = None) -> int:
             from .security import Cipher
             Cipher()  # fail fast on a missing / bad key
             s = get_settings()
+            port = a.port or s.port
             if not s.admin_tokens:
                 print("WARNING: CNE_ADMIN_TOKENS is empty — nobody can open the Client Master.", file=sys.stderr)
             if a.open:
                 import threading
                 import webbrowser
-                threading.Timer(2.0, lambda: webbrowser.open(f"http://127.0.0.1:{a.port}/")).start()
-            print(f"\nContract Note Extractor is running at http://127.0.0.1:{a.port}/ — keep this window open.\n")
+                threading.Timer(2.0, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
+            print(f"\nContract Note Extractor is running at http://127.0.0.1:{port}/ — keep this window open.\n")
             from .api import app
-            uvicorn.run(app, host=a.host, port=a.port, log_level="warning")
+            uvicorn.run(app, host=a.host, port=port, log_level="warning")
             return 0
 
         db.init_db()

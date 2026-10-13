@@ -21,6 +21,8 @@ ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resol
 BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
 load_dotenv(ROOT / ".env")
 
+DEFAULT_PORT = 8766
+
 
 def _folder(url: str) -> str:
     """Add the trailing "/" to an app folder URL (not to a file, a query or a #route)."""
@@ -141,7 +143,14 @@ class Settings:
     encryption_key: str = field(default_factory=lambda: _env("CNE_ENCRYPTION_KEY"))
     admin_tokens: list[str] = field(default_factory=lambda: _list("CNE_ADMIN_TOKENS"))
     extractor_tokens: list[str] = field(default_factory=lambda: _list("CNE_EXTRACTOR_TOKENS"))
-    cors_origins: list[str] = field(default_factory=lambda: _list("CNE_CORS_ORIGINS", "null,http://127.0.0.1:8765,http://localhost:8765"))
+    port: int = field(default_factory=lambda: _int("CNE_PORT", DEFAULT_PORT))
+    cors_extra: list[str] = field(default_factory=lambda: _list("CNE_CORS_ORIGINS", "null"))
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """CNE_CORS_ORIGINS plus this PC's own address on the configured port."""
+        own = [f"http://127.0.0.1:{self.port}", f"http://localhost:{self.port}"]
+        return list(dict.fromkeys(self.cors_extra + own))
 
     @property
     def base_url(self) -> str:
