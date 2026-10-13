@@ -2,9 +2,11 @@ CONTRACT NOTE EXTRACTOR  -  .EXE VERSION  (no Python needed)
 =============================================================
 
 FIRST TIME (Admin, once per PC)
-  1. Unzip this folder somewhere permanent, e.g. C:\ContractNoteExtractor
-     (not on the Desktop of a shared login, not inside Downloads).
-  2. Double-click ContractNoteExtractor.exe
+  1. Easiest: run ContractNoteExtractor-Setup.exe and click Next > Install.
+     It makes Start-menu and desktop shortcuts and opens the tool at the end.
+     (Or unzip ContractNoteExtractor-exe.zip somewhere permanent, e.g.
+     C:\ContractNoteExtractor, and double-click ContractNoteExtractor.exe.)
+  2. On the first start
      - It asks for the Finesse User ID, Password and PAN, creates the keys,
        and tests the login. Answer Y to the test.
      - Then the tool opens in the browser.

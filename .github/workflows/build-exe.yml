@@ -29,8 +29,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
       - name: Build
+        env:
+          CNE_VERSION: 1.0.${{ github.run_number }}
         run: python packaging/exe/build_exe.py
+      - name: Check the installer was made
+        shell: pwsh
+        run: if (-not (Test-Path dist/ContractNoteExtractor-Setup.exe)) { exit 1 }
       - name: Smoke test
         shell: pwsh
         run: |
@@ -50,9 +59,10 @@ jobs:
         run: |
           TAG=latest
           NOTES="Built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7} on $(date -u +%Y-%m-%d).
-          ContractNoteExtractor-exe.zip = Windows program, no Python needed (unzip, double-click ContractNoteExtractor.exe).
+          ContractNoteExtractor-Setup.exe = Windows installer: double-click, Next, Next, Install (recommended).
+          ContractNoteExtractor-exe.zip = the same Windows program, no Python needed (unzip, double-click ContractNoteExtractor.exe).
           ContractNoteExtractor.zip = Python version (SETUP.bat, START.bat).
           ContractNoteExtractor-exe-build-kit.zip = BUILD_EXE.bat and what it needs to build the .exe yourself."
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" --target "$GITHUB_SHA" --title "Contract Note Extractor - latest" --notes "$NOTES" \
-            dist/ContractNoteExtractor-exe.zip dist/ContractNoteExtractor.zip dist/ContractNoteExtractor-exe-build-kit.zip
+            dist/ContractNoteExtractor-Setup.exe dist/ContractNoteExtractor-exe.zip dist/ContractNoteExtractor.zip dist/ContractNoteExtractor-exe-build-kit.zip

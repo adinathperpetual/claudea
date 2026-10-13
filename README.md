@@ -49,6 +49,13 @@ Mac/Linux: run `./setup.sh`, then `./start.sh`. The manual steps below do the sa
 
 ## Windows .exe (no Python needed)
 
+**Installer (recommended):** run **ContractNoteExtractor-Setup.exe** and click Next → Install. It installs for the
+current Windows user (no admin rights), adds Start-menu and desktop shortcuts, can start the tool with Windows,
+and opens it at the end. Running a newer Setup installs over the old one and keeps `.env` and `data\`;
+uninstalling also leaves them. The build makes the installer when Inno Setup 6 is installed
+(`packaging/installer/ContractNoteExtractor.iss`).
+
+
 `ContractNoteExtractor-exe.zip` holds a folder with **ContractNoteExtractor.exe**. Unzip it to a permanent
 place such as `C:\ContractNoteExtractor` and double-click the .exe. The first run asks for the Finesse
 login, then opens the tool; later runs open the tool straight away. `.env` and `data\` are kept next to

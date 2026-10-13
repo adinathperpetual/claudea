@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TOP = "ContractNoteExtractor"
 NOT_FOR_USERS = ("tests/", "requirements-dev.txt", ".github/", ".gitignore", ".gitattributes")
 BUILD_KIT = ("BUILD_EXE.bat", "requirements.txt", "index.html", ".env.example", "finesse_sync/",
-             "packaging/exe/", "START_HERE.txt", "README.md")
+             "packaging/", "START_HERE.txt", "README.md")
 
 
 def _files() -> list[tuple[str, bytes]]:

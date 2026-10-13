@@ -22,6 +22,7 @@ echo [3/3] Building the .exe (about 2 minutes)...
 echo.
 echo Done. The program is in:  dist\exe\ContractNoteExtractor\ContractNoteExtractor.exe
 echo The zip to give to other PCs:  dist\ContractNoteExtractor-exe.zip
+if exist "dist\ContractNoteExtractor-Setup.exe" echo The installer, recommended:  dist\ContractNoteExtractor-Setup.exe
 start "" "dist"
 pause
 exit /b 0
