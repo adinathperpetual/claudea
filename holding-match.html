@@ -83,7 +83,7 @@
   .card-body{padding:20px 22px 22px}
 
   /* ===================== Dropzone ===================== */
-  .drop{position:relative;border:1.5px dashed var(--line-strong);border-radius:var(--r-md);
+  .drop{display:block;position:relative;border:1.5px dashed var(--line-strong);border-radius:var(--r-md);
     background:linear-gradient(180deg,var(--surface-2),#fff);padding:30px 18px;text-align:center;
     transition:border-color .2s,background .2s,transform .2s;cursor:pointer}
   .drop:hover{border-color:var(--accent-line)}
@@ -263,6 +263,80 @@
     body{background:#fff}
     .verdict,table.res tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
+
+  /* ===================== Multi-file: account lists ===================== */
+  .side .drop.compact{padding:16px 14px}
+  .side .drop.compact .ic,.side .drop.compact .fmt{display:none}
+  .side .drop.compact p{margin:0;font-size:13.5px}
+  .units{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+  .unit{display:flex;align-items:center;gap:12px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:10px 12px;transition:border-color .15s,background .15s}
+  .unit:hover{border-color:var(--accent-line);background:#fff}
+  .unit .fi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-family:"IBM Plex Mono";
+    font-size:9.5px;font-weight:700;color:#fff;background:var(--grad-green);flex:0 0 auto;letter-spacing:.04em}
+  .unit .fi.pdf{background:var(--grad-red)} .unit .fi.img{background:linear-gradient(135deg,#0ea5e9,#6366f1)}
+  .unit .meta{flex:1;min-width:0}
+  .unit .nm{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .unit .sub{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .unit .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+  .tag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-3)}
+  .tag.ok{background:var(--green-soft);border-color:var(--green-line);color:var(--green)}
+  .tag.warn{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber)}
+  .unit .acts{display:flex;gap:6px;flex:0 0 auto}
+  .side-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)}
+  .errs .err{display:block;margin-top:10px}
+
+  /* ===================== Pairing ===================== */
+  #pairCard{display:none;margin-top:24px}
+  #pairCard.on{display:block;animation:rise .35s ease}
+  .pair-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pair-tools .spacer{flex:1}
+  .match-btn.sm{padding:11px 26px;font-size:14.5px}
+  table.pairs{min-width:760px}
+  table.pairs td{vertical-align:middle}
+  table.pairs select{width:100%;max-width:360px;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:7px 10px;
+    font-size:12.5px;background:#fff;color:var(--ink)}
+  table.pairs select.need{border-color:var(--amber-line);background:var(--amber-soft);color:var(--amber);font-weight:600}
+  table.pairs select:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  table.pairs tr.sel td{background:var(--accent-soft)}
+  .sugg{display:inline-block;margin-top:5px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);
+    border-radius:999px;font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer}
+  .sugg:hover{background:#e2e5ff}
+  .vchip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;color:#fff;white-space:nowrap}
+  .vchip.ok{background:var(--grad-green)} .vchip.bad{background:var(--grad-red)}
+  .vchip.idle{background:var(--surface-3);color:var(--muted);font-weight:600}
+  .vsub{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .batch{display:none;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .batch.on{display:flex}
+  .bstat{flex:1;min-width:150px;border-radius:var(--r-md);padding:12px 14px;border:1px solid var(--line);background:var(--surface-2)}
+  .bstat b{display:block;font-family:"Space Grotesk";font-size:24px;line-height:1.2;color:var(--ink)}
+  .bstat small{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .bstat.ok{background:var(--green-soft);border-color:var(--green-line)} .bstat.ok b{color:var(--green)}
+  .bstat.bad{background:var(--red-soft);border-color:var(--red-line)} .bstat.bad b{color:var(--red)}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  #results{margin-top:24px}
+  .res-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .res-head h3{font-size:17px;color:var(--ink)}
+  .res-head .src{font-size:12px;color:var(--muted)}
+  .hist-badge{font-family:"IBM Plex Mono";font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:999px;
+    background:var(--amber-soft);border:1px solid var(--amber-line);color:var(--amber)}
+
+  /* ===================== History ===================== */
+  #histCard{margin-top:24px}
+  table.hist{min-width:720px}
+  .muted{color:var(--muted)}
+
+  /* ===================== Review modal ===================== */
+  .modal{position:fixed;inset:0;z-index:80;background:rgba(13,16,33,.55);backdrop-filter:blur(3px);display:none;
+    align-items:center;justify-content:center;padding:20px}
+  .modal.on{display:flex}
+  .modal .box{background:#fff;border-radius:var(--r);box-shadow:0 30px 80px -20px rgba(0,0,0,.45);width:min(860px,100%);
+    max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal .box .card-head{flex:0 0 auto}
+  .modal .review{display:block;border:none;border-radius:0;overflow:auto;flex:1}
+  .modal .review .scroll{max-height:none}
+  @media print{ #pairCard,#histCard,.res-head .btn{display:none !important} }
+
 </style>
 </head>
 <body>
@@ -278,7 +352,7 @@
     <div class="brand">
       <span class="eyebrow">Reconciliation</span>
       <h1>Holding Statement Match</h1>
-      <p>Upload the client's holding statement and ours, then match stock names and quantities.</p>
+      <p>Upload one or many client holding statements and ours, pair each client, then match one by one or all at once.</p>
     </div>
   </div>
 </header>
@@ -288,83 +362,79 @@
     <!-- ============ CLIENT ============ -->
     <section class="card side" id="side-client">
       <div class="card-head">
-        <h2><span class="num-chip">1</span>Client Holding Statement</h2>
-        <span class="ct" data-count>—</span>
+        <h2><span class="num-chip">1</span>Client Holding Statements</h2>
+        <span class="ct" data-count>0 accounts</span>
       </div>
       <div class="card-body">
         <label class="drop" data-drop>
           <div class="ic">📄</div>
-          <p>Drop client statement here</p>
-          <small>or click to browse</small>
+          <p>Drop client statements here</p>
+          <small>Multiple files allowed · each sheet / client in a file becomes a separate account</small>
           <div class="fmt"><span>XLSX</span><span>XLS</span><span>CSV</span><span>PDF</span><span>JPG</span><span>PNG</span></div>
-          <input type="file" accept=".xlsx,.xls,.csv,.pdf,image/*" />
+          <input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,image/*" />
         </label>
-        <div class="loaded">
-          <div class="filechip">
-            <div class="fi" data-fi>XLS</div>
-            <div class="meta"><div class="nm" data-fname></div><div class="sub" data-fsub></div></div>
-            <button class="x" data-remove title="Remove file">×</button>
-          </div>
-          <div class="opts">
-            <div class="fld" data-sheet-fld><label>Sheet / Account</label><select data-sheet></select></div>
-            <div class="fld" data-group-fld><label>Client</label><select data-group></select></div>
-            <div class="fld" data-name-fld><label>Client name</label><div class="val" data-cname>—</div></div>
-          </div>
-          <div class="stat-line" data-stats></div>
-          <div class="collapse-h" data-toggle-review><span>Review &amp; edit extracted holdings</span><span class="chev">›</span></div>
-          <div class="review" data-review></div>
-        </div>
         <div class="busy" data-busy><div class="spin"></div><span data-busy-text>Reading…</span></div>
-        <div class="err" data-err></div>
+        <div class="errs" data-errs></div>
+        <div class="units" data-units></div>
+        <div class="side-foot" data-foot style="display:none"><span data-foot-text></span><button class="btn mini" data-clear>Clear all</button></div>
       </div>
     </section>
 
     <!-- ============ OURS ============ -->
     <section class="card side" id="side-ours">
       <div class="card-head">
-        <h2><span class="num-chip">2</span>Our Holding Statement</h2>
-        <span class="ct" data-count>—</span>
+        <h2><span class="num-chip">2</span>Our Holding Statements</h2>
+        <span class="ct" data-count>0 clients</span>
       </div>
       <div class="card-body">
         <label class="drop" data-drop>
           <div class="ic">🏦</div>
-          <p>Drop our holding statement here</p>
-          <small>Equity Holdings export (Excel)</small>
-          <div class="fmt"><span>XLSX</span><span>XLS</span><span>CSV</span></div>
-          <input type="file" accept=".xlsx,.xls,.csv" />
+          <p>Drop our holding statements here</p>
+          <small>Equity Holdings export · multiple files allowed · family files are split per client</small>
+          <div class="fmt"><span>XLSX</span><span>XLS</span><span>CSV</span><span>PDF</span></div>
+          <input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,image/*" />
         </label>
-        <div class="loaded">
-          <div class="filechip">
-            <div class="fi" data-fi>XLS</div>
-            <div class="meta"><div class="nm" data-fname></div><div class="sub" data-fsub></div></div>
-            <button class="x" data-remove title="Remove file">×</button>
-          </div>
-          <div class="opts">
-            <div class="fld" data-sheet-fld><label>Sheet</label><select data-sheet></select></div>
-            <div class="fld" data-group-fld><label>Client</label><select data-group></select></div>
-            <div class="fld" data-name-fld><label>Client name</label><div class="val" data-cname>—</div></div>
-          </div>
-          <div class="stat-line" data-stats></div>
-          <div class="collapse-h" data-toggle-review><span>Review &amp; edit extracted holdings</span><span class="chev">›</span></div>
-          <div class="review" data-review></div>
-        </div>
         <div class="busy" data-busy><div class="spin"></div><span data-busy-text>Reading…</span></div>
-        <div class="err" data-err></div>
+        <div class="errs" data-errs></div>
+        <div class="units" data-units></div>
+        <div class="side-foot" data-foot style="display:none"><span data-foot-text></span><button class="btn mini" data-clear>Clear all</button></div>
       </div>
     </section>
   </div>
 
-  <div class="action-bar">
-    <button class="match-btn" id="matchBtn" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
-      Match Holdings
-    </button>
-    <label class="toggle" title="By default only our stocks are compared. Turn on to also list stocks the client holds that are not in our statement (for information only – they never affect the result).">
-      <input type="checkbox" id="showExtra" /><span class="sw"></span>Also show client's other stocks (not in our statement)
-    </label>
-  </div>
+  <!-- ============ PAIRING ============ -->
+  <section class="card" id="pairCard">
+    <div class="card-head">
+      <h2><span class="num-chip">3</span>Match clients</h2>
+      <span class="ct" id="pairCt"></span>
+    </div>
+    <div class="card-body">
+      <div class="pair-tools">
+        <button class="btn" id="suggestAll" title="Fill every empty selection with the suggested client (based on name). You can still change each one.">✨ Apply suggested pairs</button>
+        <span class="spacer"></span>
+        <button class="btn" id="exportAll">⬇ Export all results</button>
+        <button class="match-btn sm" id="matchAll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+          Match All
+        </button>
+      </div>
+      <div class="batch" id="batch"></div>
+      <div class="tbl-wrap">
+        <table class="res pairs">
+          <thead><tr><th>#</th><th>Client statement</th><th>Match with our client</th><th>Result</th><th class="n">Action</th></tr></thead>
+          <tbody id="pairBody"></tbody>
+        </table>
+      </div>
+      <div class="note" id="unpaired"></div>
+    </div>
+  </section>
 
+  <!-- ============ RESULT DETAIL ============ -->
   <section id="results">
+    <div class="res-head">
+      <div><h3 id="resTitle"></h3><div class="src" id="resSrc"></div></div>
+      <button class="btn mini" id="closeRes">✕ Close</button>
+    </div>
     <div class="verdict" id="verdict"></div>
     <div class="kpis" id="kpis"></div>
     <div class="card">
@@ -378,6 +448,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <input id="q" placeholder="Search stock name or ISIN…" />
           </div>
+          <label class="toggle" title="By default only our stocks are compared. Turn on to also list stocks the client holds that are not in our statement (for information only – they never affect the result).">
+            <input type="checkbox" id="showExtra" /><span class="sw"></span>Also show client's other stocks
+          </label>
           <button class="btn" id="exportBtn">⬇ Export Excel</button>
           <button class="btn" onclick="window.print()">🖨 Print</button>
         </div>
@@ -401,8 +474,40 @@
     </div>
   </section>
 
+  <!-- ============ HISTORY ============ -->
+  <section class="card" id="histCard">
+    <div class="card-head">
+      <h2>🕘 Match history</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="ct" id="histCt">0 saved</span>
+        <button class="btn mini" id="histClear">Clear history</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="tbl-wrap" style="margin-top:0">
+        <table class="res hist">
+          <thead><tr><th>Date &amp; time</th><th>Client statement</th><th>Our client</th><th>Result</th><th class="n"></th></tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <div class="note">Saved only in this browser on this computer. Older results stay here until you delete them.</div>
+    </div>
+  </section>
+
   <p class="footnote">All files are processed in your browser. Nothing is uploaded to a server.</p>
 </main>
+
+<!-- ============ REVIEW MODAL ============ -->
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="card-head">
+      <h2 id="modalTitle">Review holdings</h2>
+      <button class="x" id="modalClose" title="Close">×</button>
+    </div>
+    <div class="review" id="modalBody"></div>
+  </div>
+</div>
+
 
 <script>
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -463,9 +568,10 @@ function nameMatchScore(a, b) {
   // Given name decides between family members: "Viral Nagori" vs "VIRAL BHARAT NAGORI",
   // or surname-first "NAGORI BHARAT MITHALAL" vs "Bharat M Nagori"
   const given = wa[0] === wb[0] || (wb[0] === wa[wa.length - 1] && wa[0] === wb[1]);
+  // An HUF is a separate account from the person it is named after
+  if (wa.includes("HUF") !== wb.includes("HUF")) return 0;
   return Math.max(dice(compact(a), compact(b)), hit / Math.min(wa.length, wb.length) * (hit >= 2 ? 1 : 0.6)) * (given ? 1 : 0.8);
 }
-const PICK = "__pick__";
 const hamming = (a, b) => (a.length !== b.length) ? 99 : [...a].reduce((n, c, i) => n + (c !== b[i]), 0);
 
 /* ======================================================================
@@ -731,183 +837,206 @@ async function readPdf(buf, setBusy) {
 }
 
 /* ======================================================================
-   Side (upload card) controller
+   File reading → accounts ("units")
+   Every sheet of a workbook, and every client inside a family file,
+   becomes its own account that can be matched separately.
    ====================================================================== */
+async function readFile(file, setBusy) {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const buf = await file.arrayBuffer();
+  if (ext === "pdf") {
+    setBusy("Reading PDF…");
+    return { kind: "PDF", sheets: { "PDF": await readPdf(new Uint8Array(buf), setBusy) } };
+  }
+  if (/^image\//.test(file.type) || /^(png|jpe?g|webp|bmp|gif|tiff?)$/.test(ext)) {
+    setBusy("Loading OCR engine…");
+    const items = await ocrItems(file, pc => setBusy(`Reading image (OCR)… ${pc}%`));
+    return { kind: "IMG", sheets: { "Image": parseLines(itemsToLines(items)) } };
+  }
+  setBusy("Reading spreadsheet…");
+  const wb = XLSX.read(buf, { type: "array" });
+  const sheets = {};
+  wb.SheetNames.forEach(n => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "", raw: true, blankrows: false });
+    sheets[n] = parseTable(rows);
+  });
+  return { kind: ext === "csv" ? "CSV" : "XLS", sheets };
+}
+
+let UID = 0, FID = 0;
+const copyH = list => list.map(h => ({ name: h.name, isin: h.isin, qty: h.qty, note: h.note }));
+const baseName = f => f.replace(/\.[^.]+$/, "");
+
+function unitsFromFile(side, fileName, kind, sheets) {
+  const fileId = ++FID, out = [];
+  const names = Object.keys(sheets);
+  for (const sn of names) {
+    const p = sheets[sn];
+    if (!p.holdings.length && names.length > 1) continue;
+    const groups = [...new Set(p.holdings.map(h => h.group).filter(Boolean))];
+    const mk = (name, holdings) => out.push({
+      id: ++UID, side, fileId, file: fileName, kind, sheet: names.length > 1 ? sn : "",
+      name: clean(name) || baseName(fileName), customer: p.customer || "", holdings: copyH(holdings)
+    });
+    if (groups.length) {
+      groups.forEach(g => mk(g, p.holdings.filter(h => h.group === g)));
+      const loose = p.holdings.filter(h => !h.group);
+      if (loose.length) mk(p.customer || sn, loose);
+    } else {
+      mk(p.customer || (names.length > 1 ? sn : baseName(fileName)), p.holdings);
+    }
+  }
+  return out;
+}
+
 class Side {
-  constructor(id, allowAll) {
+  constructor(id, key) {
+    this.key = key;
     this.el = document.getElementById(id);
-    this.allowAll = allowAll;
     this.q = s => this.el.querySelector(s);
-    this.reset();
+    this.units = [];
+    this.queue = [];
+    this.running = false;
     const drop = this.q("[data-drop]"), input = this.q("input[type=file]");
-    input.addEventListener("change", () => input.files[0] && this.load(input.files[0]));
+    input.addEventListener("change", () => { this.add([...input.files]); input.value = ""; });
     ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
     ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
-    drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) this.load(f); });
-    this.q("[data-remove]").addEventListener("click", () => { input.value = ""; this.reset(); onChange(); });
-    this.q("[data-sheet]").addEventListener("change", e => { this.useSheet(e.target.value); onChange(); });
-    this.q("[data-group]").addEventListener("change", e => { this.group = e.target.value; this.render(); onChange(); });
-    const tg = this.q("[data-toggle-review]");
-    tg.addEventListener("click", () => { tg.classList.toggle("open"); this.q("[data-review]").classList.toggle("open"); });
-  }
-  reset() {
-    this.file = null; this.sheets = {}; this.sheet = ""; this.parsed = null; this.group = "";
-    this.el.classList.remove("has-file");
-    this.busy(false); this.error("");
-    this.q("[data-count]").textContent = "—";
+    drop.addEventListener("drop", e => this.add([...e.dataTransfer.files]));
+    this.q("[data-clear]").addEventListener("click", () => {
+      if (!confirm("Remove all files on this side?")) return;
+      [...this.units].forEach(u => this.remove(u, true));
+      this.q("[data-errs]").innerHTML = "";
+      refresh();
+    });
   }
   busy(text) {
-    const b = this.q("[data-busy]");
-    b.classList.toggle("on", !!text);
+    this.q("[data-busy]").classList.toggle("on", !!text);
     if (text) this.q("[data-busy-text]").textContent = text;
   }
-  error(msg) { const e = this.q("[data-err]"); e.textContent = msg; e.classList.toggle("on", !!msg); }
-
-  async load(file) {
-    if (!this.allowAll && !/\.(xlsx|xls|csv)$/i.test(file.name)) { this.error("Please upload our holding statement as Excel (.xlsx / .xls) or CSV."); return; }
-    this.reset(); this.file = file; this.error("");
-    const ext = (file.name.split(".").pop() || "").toLowerCase();
-    try {
-      const buf = await file.arrayBuffer();
-      if (ext === "pdf") {
-        this.kind = "PDF";
-        this.busy("Reading PDF…");
-        const res = await readPdf(new Uint8Array(buf), t => this.busy(t));
-        this.sheets = { "PDF": res }; this.parsedCache = { "PDF": res };
-      } else if (/^image\//.test(file.type) || /^(png|jpe?g|webp|bmp|gif|tiff?)$/.test(ext)) {
-        this.kind = "IMG";
-        this.busy("Loading OCR engine…");
-        const items = await ocrItems(file, pc => this.busy(`Reading image (OCR)… ${pc}%`));
-        const res = parseLines(itemsToLines(items));
-        this.sheets = { "Image": res }; this.parsedCache = { "Image": res };
-      } else {
-        this.kind = ext === "csv" ? "CSV" : "XLS";
-        this.busy("Reading spreadsheet…");
-        const wb = XLSX.read(buf, { type: "array" });
-        this.parsedCache = {};
-        wb.SheetNames.forEach(n => {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "", raw: true, blankrows: false });
-          this.parsedCache[n] = parseTable(rows);
-        });
-        this.sheets = this.parsedCache;
+  error(msg) {
+    const d = document.createElement("div");
+    d.className = "err on"; d.textContent = msg;
+    this.q("[data-errs]").appendChild(d);
+  }
+  add(files) {
+    this.queue.push(...files);
+    if (!this.running) this.pump();
+  }
+  async pump() {
+    this.running = true;
+    let done = 0;
+    while (this.queue.length) {
+      const file = this.queue.shift();
+      const total = done + this.queue.length + 1;
+      const pre = total > 1 ? `File ${done + 1} of ${total} · ${file.name} – ` : `${file.name} – `;
+      try {
+        const res = await readFile(file, t => this.busy(pre + t));
+        const units = unitsFromFile(this.key, file.name, res.kind, res.sheets);
+        if (!units.length || units.every(u => !u.holdings.length))
+          this.error(`${file.name}: no holdings could be detected. Use “Review” to add rows manually.`);
+        this.units.push(...units);
+      } catch (e) {
+        console.error(e);
+        this.error(`${file.name}: could not read this file – ${e && e.message ? e.message : e}`);
       }
-      this.busy(false);
-      const names = Object.keys(this.sheets);
-      const firstGood = names.find(n => this.sheets[n].holdings.length) || names[0];
-      const sel = this.q("[data-sheet]");
-      sel.innerHTML = names.map(n => {
-        const p = this.sheets[n];
-        return `<option value="${esc(n)}">${esc(n)}${p.customer ? " — " + esc(p.customer) : ""} (${p.holdings.length})</option>`;
-      }).join("");
-      sel.value = firstGood;
-      this.q("[data-sheet-fld]").style.display = names.length > 1 ? "" : "none";
-      this.el.classList.add("has-file");
-      this.q("[data-fname]").textContent = file.name;
-      this.q("[data-fi]").textContent = this.kind;
-      this.q("[data-fi]").className = "fi" + (this.kind === "PDF" ? " pdf" : this.kind === "IMG" ? " img" : "");
-      this.useSheet(firstGood);
-      if (!this.parsed.holdings.length) this.error("No holdings could be detected in this file. You can add rows manually in the review table below.");
-    } catch (e) {
-      console.error(e);
-      this.busy(false);
-      this.error("Could not read this file: " + (e && e.message ? e.message : e));
+      done++;
+      this.render(); refresh();
     }
-    onChange();
+    this.busy(false);
+    this.running = false;
   }
-
-  useSheet(name) {
-    this.sheet = name;
-    this.parsed = this.sheets[name];
-    const groups = [...new Set(this.parsed.holdings.map(h => h.group).filter(Boolean))];
-    this.groups = groups;
-    // A family file (several clients) is never pre-selected: the user picks the member to match.
-    this.group = groups.length === 1 ? groups[0] : groups.length > 1 ? PICK : "";
-    this.suggest = "";
-    const gs = this.q("[data-group]");
-    gs.innerHTML = (groups.length > 1
-        ? `<option value="${PICK}" disabled>— Select client (${groups.length} in file) —</option>` +
-          groups.map(g => `<option value="${esc(g)}">${esc(g)} (${this.parsed.holdings.filter(h => h.group === g).length} stocks)</option>`).join("") +
-          `<option value="">All clients combined</option>`
-        : groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(""));
-    gs.value = this.group;
-    this.q("[data-group-fld]").style.display = groups.length ? "" : "none";
-    this.render();
+  remove(u, silent) {
+    this.units.splice(this.units.indexOf(u), 1);
+    onUnitRemoved(u);
+    if (!silent) { this.render(); refresh(); }
+    else this.render();
   }
-
-  get holdings() {
-    if (!this.parsed) return [];
-    if (this.needsPick) return [];
-    return this.parsed.holdings.filter(h => !this.group || h.group === this.group || (h.group === "" && h._manual));
-  }
-  get needsPick() { return this.group === PICK; }
-  get clientName() { return (!this.needsPick && this.group) || (this.parsed && this.parsed.customer) || ""; }
-
   render() {
-    const hs = this.holdings;
-    const cname = this.clientName;
-    this.q("[data-cname]").textContent = cname || "—";
-    this.q("[data-name-fld]").style.display = this.groups && this.groups.length ? "none" : "";
-    this.q("[data-fsub]").textContent = `${(this.file.size / 1024).toFixed(1)} KB · ${this.kind === "IMG" ? "OCR from image" : this.kind === "PDF" ? "PDF" : "Spreadsheet"}`;
-    this.q("[data-group]").classList.toggle("need", this.needsPick);
-    if (this.needsPick) {
-      this.q("[data-count]").textContent = `${this.groups.length} clients`;
-      this.q("[data-stats]").innerHTML =
-        `<span class="pill warn">⚠ Family file with ${this.groups.length} clients – select the client to match</span>` +
-        (this.suggest ? `<button class="pill sug" data-sug>Suggested: ${esc(this.suggest)} – click to select</button>` : "");
-      const sb = this.q("[data-sug]");
-      if (sb) sb.addEventListener("click", () => { this.group = this.suggest; this.q("[data-group]").value = this.group; this.render(); onChange(); });
-      this.renderReview();
-      return;
-    }
-    this.q("[data-count]").textContent = `${hs.length} stocks`;
-    const bad = hs.filter(h => Number.isNaN(h.qty)).length;
-    const noIsin = hs.filter(h => !h.isin).length;
-    const notes = hs.filter(h => h.note).length;
-    this.q("[data-stats]").innerHTML =
-      `<span class="pill ok">✓ ${hs.length} stocks extracted</span>` +
-      (bad ? `<span class="pill warn">⚠ ${bad} unreadable qty – please fix below</span>` : "") +
-      (noIsin && noIsin < hs.length ? `<span class="pill">${noIsin} without ISIN (matched by name)</span>` : "") +
-      (noIsin === hs.length && hs.length ? `<span class="pill">No ISIN – matching by name</span>` : "") +
-      (notes ? `<span class="pill">${notes} qty from Free+Pledge+Locked</span>` : "") +
-      (this.kind !== "XLS" && this.kind !== "CSV" ? `<span class="pill warn">Auto-read from ${this.kind === "PDF" ? "PDF" : "image"} – please verify</span>` : "");
-    if (bad || this.kind === "IMG") {
-      this.q("[data-toggle-review]").classList.add("open"); this.q("[data-review]").classList.add("open");
-    }
-    this.renderReview();
-  }
-
-  renderReview() {
-    const hs = this.holdings;
-    const box = this.q("[data-review]");
-    box.innerHTML = `<div class="scroll"><table>
-      <thead><tr><th style="width:52%">Stock name</th><th>ISIN</th><th style="width:110px;text-align:right">Qty</th><th></th></tr></thead>
-      <tbody>${hs.map((h, i) => `<tr class="${Number.isNaN(h.qty) ? "bad" : ""}" data-i="${i}">
-        <td><input data-f="name" value="${esc(h.name)}" title="${esc(h.note)}"></td>
-        <td><input class="i" data-f="isin" value="${esc(h.isin)}"></td>
-        <td><input class="q" data-f="qty" value="${Number.isNaN(h.qty) ? "" : h.qty}" placeholder="?"></td>
-        <td><button class="del" title="Remove row">×</button></td></tr>`).join("")}</tbody></table></div>
-      <div class="foot"><span>Edits here are used for matching.</span><button class="btn mini" data-add>+ Add row</button></div>`;
-    box.querySelectorAll("tbody tr").forEach(tr => {
-      const h = hs[+tr.dataset.i];
-      tr.querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
-        const f = inp.dataset.f;
-        if (f === "qty") { h.qty = parseNum(inp.value); tr.classList.toggle("bad", Number.isNaN(h.qty)); }
-        else if (f === "isin") h.isin = (clean(inp.value).toUpperCase().match(ISIN_RE) || [clean(inp.value).toUpperCase()])[0];
-        else h.name = clean(inp.value);
-        this.render(); onChange(true);
-      }));
-      tr.querySelector(".del").addEventListener("click", () => {
-        this.parsed.holdings.splice(this.parsed.holdings.indexOf(h), 1);
-        this.render(); onChange(true);
-      });
-    });
-    box.querySelector("[data-add]").addEventListener("click", () => {
-      this.parsed.holdings.push({ name: "", isin: "", qty: NaN, group: this.group, note: "", _manual: true });
-      this.render();
-      const ins = box.querySelectorAll('input[data-f="name"]'); ins[ins.length - 1]?.focus();
+    const n = this.units.length;
+    this.q("[data-count]").textContent = `${n} ${this.key === "client" ? "account" : "client"}${n === 1 ? "" : "s"}`;
+    this.q("[data-drop]").classList.toggle("compact", n > 0);
+    const files = new Set(this.units.map(u => u.fileId)).size;
+    this.q("[data-foot]").style.display = n ? "" : "none";
+    this.q("[data-foot-text]").textContent = `${files} file${files === 1 ? "" : "s"} · ${n} ${this.key === "client" ? "account" : "client"}${n === 1 ? "" : "s"}`;
+    const box = this.q("[data-units]");
+    box.innerHTML = this.units.map(u => {
+      const hs = u.holdings;
+      const bad = hs.filter(h => Number.isNaN(h.qty)).length;
+      const noIsin = hs.length && hs.every(h => !h.isin);
+      const notes = hs.filter(h => h.note).length;
+      return `<div class="unit" data-id="${u.id}">
+        <div class="fi ${u.kind === "PDF" ? "pdf" : u.kind === "IMG" ? "img" : ""}">${u.kind}</div>
+        <div class="meta">
+          <div class="nm" title="${esc(u.name)}">${esc(u.name)}</div>
+          <div class="sub" title="${esc(u.file)}">${esc(u.file)}${u.sheet ? " · sheet " + esc(u.sheet) : ""}</div>
+          <div class="tags">
+            <span class="tag ${hs.length ? "ok" : "warn"}">${hs.length} stocks</span>
+            ${bad ? `<span class="tag warn">⚠ ${bad} unreadable qty</span>` : ""}
+            ${noIsin ? `<span class="tag">No ISIN – by name</span>` : ""}
+            ${notes ? `<span class="tag">${notes} from Free+Pledge</span>` : ""}
+            ${u.kind === "PDF" || u.kind === "IMG" ? `<span class="tag warn">Auto-read – verify</span>` : ""}
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn mini" data-review>Review</button>
+          <button class="x" data-rm title="Remove">×</button>
+        </div></div>`;
+    }).join("");
+    box.querySelectorAll(".unit").forEach(el => {
+      const u = this.units.find(x => x.id === +el.dataset.id);
+      el.querySelector("[data-review]").addEventListener("click", () => openReview(u));
+      el.querySelector("[data-rm]").addEventListener("click", () => this.remove(u));
     });
   }
 }
+
+/* ---------------- Review / edit modal ---------------- */
+let REVIEW = null;
+function openReview(u) {
+  REVIEW = u;
+  document.getElementById("modalTitle").textContent = `Review · ${u.name}`;
+  renderReview();
+  document.getElementById("modal").classList.add("on");
+}
+function closeReview() {
+  if (!REVIEW) return;
+  const u = REVIEW; REVIEW = null;
+  document.getElementById("modal").classList.remove("on");
+  u.holdings = u.holdings.filter(h => clean(h.name) || h.isin || !Number.isNaN(h.qty));
+  (u.side === "client" ? clientSide : oursSide).render();
+  onUnitEdited(u);
+}
+function renderReview() {
+  const u = REVIEW, hs = u.holdings;
+  const box = document.getElementById("modalBody");
+  box.innerHTML = `<div class="scroll"><table>
+    <thead><tr><th style="width:52%">Stock name</th><th>ISIN</th><th style="width:110px;text-align:right">Qty</th><th></th></tr></thead>
+    <tbody>${hs.map((h, i) => `<tr class="${Number.isNaN(h.qty) ? "bad" : ""}" data-i="${i}">
+      <td><input data-f="name" value="${esc(h.name)}" title="${esc(h.note || "")}"></td>
+      <td><input class="i" data-f="isin" value="${esc(h.isin)}"></td>
+      <td><input class="q" data-f="qty" value="${Number.isNaN(h.qty) ? "" : h.qty}" placeholder="?"></td>
+      <td><button class="del" title="Remove row">×</button></td></tr>`).join("")}</tbody></table></div>
+    <div class="foot"><span>${esc(u.file)}${u.sheet ? " · sheet " + esc(u.sheet) : ""} · edits here are used for matching.</span><button class="btn mini" data-add>+ Add row</button></div>`;
+  box.querySelectorAll("tbody tr").forEach(tr => {
+    const h = hs[+tr.dataset.i];
+    tr.querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+      const f = inp.dataset.f;
+      if (f === "qty") { h.qty = parseNum(inp.value); tr.classList.toggle("bad", Number.isNaN(h.qty)); }
+      else if (f === "isin") h.isin = (clean(inp.value).toUpperCase().match(ISIN_RE) || [clean(inp.value).toUpperCase()])[0];
+      else h.name = clean(inp.value);
+    }));
+    tr.querySelector(".del").addEventListener("click", () => { hs.splice(hs.indexOf(h), 1); renderReview(); });
+  });
+  box.querySelector("[data-add]").addEventListener("click", () => {
+    hs.push({ name: "", isin: "", qty: NaN, note: "" });
+    renderReview();
+    const ins = box.querySelectorAll('input[data-f="name"]'); ins[ins.length - 1]?.focus();
+  });
+}
+document.getElementById("modalClose").addEventListener("click", closeReview);
+document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeReview(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeReview(); });
+
 
 /* ======================================================================
    Matching
@@ -974,62 +1103,204 @@ function matchHoldings(oursRaw, clientRaw) {
 }
 
 /* ======================================================================
-   Results UI
+   Pairing: each client account is matched with one of our clients.
+   Nothing is pre-selected – the user picks (or applies suggestions).
    ====================================================================== */
-const client = new Side("side-client", true);
-const ours = new Side("side-ours", false);
-const matchBtn = document.getElementById("matchBtn");
+const clientSide = new Side("side-client", "client");
+const oursSide = new Side("side-ours", "ours");
+const PAIRS = new Map();          // client unit id → { ourKey, result, histId }
+let CUR = null;                   // result currently shown in the detail view
+let FILTER = "all";
 const showExtra = document.getElementById("showExtra");
-let ALL = null, RESULT = null, FILTER = "all";
 
-function onChange(fromEdit) {
-  const picking = client.needsPick || ours.needsPick;
-  matchBtn.disabled = picking || !(client.parsed && ours.parsed && (client.holdings.length || ours.holdings.length));
-  matchBtn.title = picking ? "Select the client in the family holding file first" : "";
-  // Suggest (never auto-select) the family member whose name resembles the other statement's client name
-  for (const [side, other] of [[ours, client], [client, ours]]) {
-    if (fromEdit || !side.parsed || !side.needsPick) continue;
-    let best = "", bs = 0;
-    const target = other.parsed && other.clientName;
-    if (target) side.groups.forEach(g => { const s = nameMatchScore(g, target); if (s > bs) { bs = s; best = g; } });
-    const sug = bs >= 0.6 ? best : "";
-    if (sug !== side.suggest) { side.suggest = sug; side.render(); }
+// Our side choices: every client, plus "all combined" for files holding several clients
+function ourChoices() {
+  const list = oursSide.units.map(u => ({ key: "u" + u.id, label: u.name, src: u.file + (u.sheet ? " · " + u.sheet : ""), units: [u] }));
+  const byFile = new Map();
+  oursSide.units.forEach(u => { if (!byFile.has(u.fileId)) byFile.set(u.fileId, []); byFile.get(u.fileId).push(u); });
+  byFile.forEach((us, fid) => {
+    if (us.length > 1) list.push({ key: "f" + fid, label: `All clients combined`, src: us[0].file, units: us, combined: true });
+  });
+  return list;
+}
+const choiceByKey = k => ourChoices().find(c => c.key === k);
+const ourHoldings = ch => ch.units.flatMap(u => u.holdings);
+
+function suggestFor(cu) {
+  let best = null, bs = 0;
+  for (const ch of ourChoices()) {
+    if (ch.combined) continue;
+    const s = Math.max(nameMatchScore(ch.label, cu.name), cu.customer ? nameMatchScore(ch.label, cu.customer) : 0);
+    if (s > bs) { bs = s; best = ch; }
   }
-  if (document.getElementById("results").classList.contains("on")) {
-    if (matchBtn.disabled) document.getElementById("results").classList.remove("on");
-    else runMatch(false);
-  }
+  return bs >= 0.6 ? best : null;
 }
 
-function runMatch(scroll = true) {
-  ALL = matchHoldings(ours.holdings, client.holdings);
+function pairOf(cu) {
+  if (!PAIRS.has(cu.id)) PAIRS.set(cu.id, { ourKey: "", result: null, histId: null });
+  return PAIRS.get(cu.id);
+}
+
+function summarize(all) {
+  const c = { ok: 0, diff: 0, miss: 0, extra: 0 };
+  all.forEach(r => c[r.st]++);
+  const scope = c.ok + c.diff + c.miss;
+  return { ...c, scope, ok_: c.diff + c.miss === 0 && scope > 0, pct: scope ? Math.floor((c.ok / scope) * 1000) / 10 : 0 };
+}
+
+function runPair(cu, { show = true, save = true } = {}) {
+  const p = pairOf(cu);
+  const ch = choiceByKey(p.ourKey);
+  if (!ch) return null;
+  const all = matchHoldings(ourHoldings(ch), cu.holdings);
+  p.result = {
+    all, sum: summarize(all), ts: Date.now(),
+    client: cu.name, clientSrc: cu.file + (cu.sheet ? " · " + cu.sheet : ""),
+    ours: ch.combined ? `${ch.label} (${ch.src})` : ch.label, oursSrc: ch.src, cuId: cu.id,
+  };
+  if (save) p.histId = saveHistory(p.result, p.histId);
+  if (show) showResult(p.result, false);
+  return p.result;
+}
+
+function onUnitRemoved(u) {
+  if (u.side === "client") PAIRS.delete(u.id);
+  else PAIRS.forEach(p => { if (!choiceByKey(p.ourKey) || p.ourKey === "u" + u.id) { p.ourKey = ""; p.result = null; } });
+  if (CUR && !CUR.fromHistory && (CUR.cuId === u.id || !PAIRS.has(CUR.cuId) || !PAIRS.get(CUR.cuId).result)) hideResult();
+}
+function onUnitEdited(u) {
+  // Re-run every finished match that uses this account so results stay current
+  for (const cu of clientSide.units) {
+    const p = pairOf(cu);
+    if (!p.result) continue;
+    const ch = choiceByKey(p.ourKey);
+    if (cu === u || (ch && ch.units.includes(u))) {
+      const showing = CUR && !CUR.fromHistory && CUR.cuId === cu.id;
+      runPair(cu, { show: showing });
+    }
+  }
+  refresh();
+}
+
+function refresh() {
+  const cus = clientSide.units;
+  const card = document.getElementById("pairCard");
+  card.classList.toggle("on", cus.length > 0 || oursSide.units.length > 0);
+  const choices = ourChoices();
+  // drop selections pointing at removed clients
+  PAIRS.forEach(p => { if (p.ourKey && !choices.some(c => c.key === p.ourKey)) { p.ourKey = ""; p.result = null; } });
+
+  const paired = cus.filter(cu => pairOf(cu).ourKey).length;
+  document.getElementById("pairCt").textContent = `${paired} of ${cus.length} paired`;
+  const opts = sel => `<option value="" ${sel ? "" : "selected"} disabled>— Select our client —</option>` +
+    choices.filter(c => !c.combined).map(c => `<option value="${c.key}" ${sel === c.key ? "selected" : ""}>${esc(c.label)} — ${esc(c.src)} (${ourHoldings(c).length})</option>`).join("") +
+    (choices.some(c => c.combined) ? `<optgroup label="Family files">` +
+      choices.filter(c => c.combined).map(c => `<option value="${c.key}" ${sel === c.key ? "selected" : ""}>All clients combined — ${esc(c.src)} (${ourHoldings(c).length})</option>`).join("") + `</optgroup>` : "");
+
+  const B = document.getElementById("pairBody");
+  if (!cus.length) {
+    B.innerHTML = `<tr><td colspan="5" class="empty">Upload client statements (left) to start pairing.</td></tr>`;
+  } else if (!choices.length) {
+    B.innerHTML = cus.map((cu, i) => `<tr><td class="mono" style="color:var(--muted-2)">${i + 1}</td>
+      <td><div class="sname">${esc(cu.name)}</div><div class="salt">${esc(cu.file)}${cu.sheet ? " · " + esc(cu.sheet) : ""} · ${cu.holdings.length} stocks</div></td>
+      <td colspan="3" class="muted">Upload our holding statement (right) to choose a client.</td></tr>`).join("");
+  } else {
+    B.innerHTML = cus.map((cu, i) => {
+      const p = pairOf(cu), r = p.result, sug = !p.ourKey && suggestFor(cu);
+      const showing = CUR && !CUR.fromHistory && CUR.cuId === cu.id;
+      const res = r
+        ? `<span class="vchip ${r.sum.ok_ ? "ok" : "bad"}">${r.sum.ok_ ? "✓ MATCHED" : "✕ NOT MATCHED"}</span>
+           <div class="vsub">${r.sum.pct}% · ${r.sum.ok}/${r.sum.scope} matched${r.sum.diff ? ` · ${r.sum.diff} qty diff` : ""}${r.sum.miss ? ` · ${r.sum.miss} missing` : ""}</div>`
+        : `<span class="vchip idle">Not matched yet</span>`;
+      return `<tr data-id="${cu.id}" class="${showing ? "sel" : ""}">
+        <td class="mono" style="color:var(--muted-2)">${i + 1}</td>
+        <td><div class="sname">${esc(cu.name)}</div><div class="salt">${esc(cu.file)}${cu.sheet ? " · " + esc(cu.sheet) : ""} · ${cu.holdings.length} stocks</div></td>
+        <td><select class="${p.ourKey ? "" : "need"}">${opts(p.ourKey)}</select>
+          ${sug ? `<br><button class="sugg" data-sug="${sug.key}">Suggested: ${esc(sug.label)} – click to select</button>` : ""}</td>
+        <td>${res}</td>
+        <td class="n" style="white-space:nowrap">
+          ${r ? `<button class="btn mini" data-view>View</button> ` : ""}
+          <button class="btn mini" data-match ${p.ourKey ? "" : "disabled"}>${r ? "Re-match" : "Match"}</button></td></tr>`;
+    }).join("");
+    B.querySelectorAll("tr[data-id]").forEach(tr => {
+      const cu = cus.find(u => u.id === +tr.dataset.id), p = pairOf(cu);
+      const setKey = k => { p.ourKey = k; p.result = null; p.histId = null; if (CUR && !CUR.fromHistory && CUR.cuId === cu.id) hideResult(); refresh(); };
+      tr.querySelector("select").addEventListener("change", e => setKey(e.target.value));
+      tr.querySelector("[data-sug]")?.addEventListener("click", e => setKey(e.target.dataset.sug));
+      tr.querySelector("[data-match]").addEventListener("click", () => { runPair(cu); refresh(); });
+      tr.querySelector("[data-view]")?.addEventListener("click", () => { showResult(p.result, false); refresh(); });
+    });
+  }
+
+  const used = new Set(cus.map(cu => pairOf(cu).ourKey).filter(Boolean));
+  const unused = choices.filter(c => !c.combined && !used.has(c.key)).map(c => c.label);
+  document.getElementById("unpaired").innerHTML = cus.length && unused.length
+    ? `Our clients not paired with any client statement: <b>${unused.map(esc).join(", ")}</b>` : "";
+  document.getElementById("matchAll").disabled = !paired;
+  document.getElementById("suggestAll").disabled = !cus.some(cu => !pairOf(cu).ourKey && suggestFor(cu));
+  document.getElementById("exportAll").disabled = !cus.some(cu => pairOf(cu).result);
+  renderBatch();
+}
+
+function renderBatch() {
+  const rs = clientSide.units.map(cu => pairOf(cu).result).filter(Boolean);
+  const el = document.getElementById("batch");
+  el.classList.toggle("on", rs.length > 0);
+  if (!rs.length) return;
+  const ok = rs.filter(r => r.sum.ok_).length, bad = rs.length - ok;
+  const waiting = clientSide.units.length - rs.length;
+  el.innerHTML = `<div class="bstat"><small>Accounts checked</small><b>${rs.length}</b></div>
+    <div class="bstat ok"><small>Matched</small><b>${ok}</b></div>
+    <div class="bstat bad"><small>Not matched</small><b>${bad}</b></div>
+    <div class="bstat"><small>Not matched yet</small><b>${waiting}</b></div>`;
+}
+
+document.getElementById("suggestAll").addEventListener("click", () => {
+  clientSide.units.forEach(cu => { const p = pairOf(cu); if (!p.ourKey) { const s = suggestFor(cu); if (s) p.ourKey = s.key; } });
+  refresh();
+});
+document.getElementById("matchAll").addEventListener("click", () => {
+  const cus = clientSide.units.filter(cu => pairOf(cu).ourKey);
+  cus.forEach(cu => runPair(cu, { show: false }));
+  const skipped = clientSide.units.length - cus.length;
+  refresh();
+  if (CUR && !CUR.fromHistory) { const p = PAIRS.get(CUR.cuId); if (p && p.result) showResult(p.result, false, false); }
+  document.getElementById("pairCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (skipped) setTimeout(() => alert(`${cus.length} account(s) matched. ${skipped} account(s) skipped because no client was selected.`), 300);
+});
+
+/* ======================================================================
+   Result detail view
+   ====================================================================== */
+function showResult(res, fromHistory, scroll = true) {
+  CUR = { ...res, fromHistory };
+  FILTER = "all";
+  document.getElementById("q").value = "";
+  document.getElementById("resTitle").innerHTML = `${esc(res.client)} <span class="muted" style="font-weight:500">⇄</span> ${esc(res.ours)}`;
+  document.getElementById("resSrc").innerHTML =
+    `Client: ${esc(res.clientSrc)} · Ours: ${esc(res.oursSrc)} · ${new Date(res.ts).toLocaleString("en-IN")}` +
+    (fromHistory ? ` <span class="hist-badge">FROM HISTORY</span>` : "");
   applyView();
   const R = document.getElementById("results");
   R.classList.add("on");
   if (scroll) R.scrollIntoView({ behavior: "smooth", block: "start" });
+  refresh();
 }
+function hideResult() { CUR = null; document.getElementById("results").classList.remove("on"); }
+document.getElementById("closeRes").addEventListener("click", () => { hideResult(); refresh(); });
 
-// Only our stocks are compared; client-only stocks are listed just when the user asks for them
+let RESULT = [];
 function applyView() {
-  RESULT = showExtra.checked ? ALL : ALL.filter(r => r.st !== "extra");
+  if (!CUR) return;
+  RESULT = showExtra.checked ? CUR.all : CUR.all.filter(r => r.st !== "extra");
   if (FILTER === "extra" && !showExtra.checked) FILTER = "all";
   document.querySelector("[data-extra-legend]").style.display = showExtra.checked ? "" : "none";
   renderResults();
 }
 
-function counts() {
-  const c = { all: RESULT.length, ok: 0, diff: 0, miss: 0, extra: 0 };
-  RESULT.forEach(r => c[r.st]++);
-  return c;
-}
-
 function renderResults() {
-  const c = counts();
-  const scope = c.ok + c.diff + c.miss;
-  const problems = c.diff + c.miss;
-  const pct = scope ? Math.floor((c.ok / scope) * 1000) / 10 : 0;
-  const ok = problems === 0 && scope > 0;
-  const who = ours.clientName || client.clientName;
+  const c = summarize(CUR.all);
+  const ok = c.ok_;
   const V = document.getElementById("verdict");
   V.className = "verdict " + (ok ? "ok" : "bad");
   V.innerHTML = `
@@ -1037,37 +1308,38 @@ function renderResults() {
       ? `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>`}</div>
     <div class="vt">
-      <small>${esc(who ? "Result · " + who : "Result")}</small>
+      <small>Result · ${esc(CUR.client)}</small>
       <h2>${ok ? "MATCHED" : "NOT MATCHED"}</h2>
       <p>${ok
         ? `All ${c.ok} of our stocks match the client's statement with identical quantities.`
         : [c.diff && `${c.diff} quantity difference${c.diff > 1 ? "s" : ""}`,
            c.miss && `${c.miss} stock${c.miss > 1 ? "s" : ""} missing in client statement`,
-          ].filter(Boolean).join(" · ")}</p>
+           !c.scope && `No stocks found in our statement`].filter(Boolean).join(" · ")}</p>
     </div>
-    <div class="pct"><b>${pct}%</b><span>${c.ok} / ${scope} matched</span></div>`;
+    <div class="pct"><b>${c.pct}%</b><span>${c.ok} / ${c.scope} matched</span></div>`;
 
   const K = [
-    ["all", "k-all", "Our stocks", c.ok + c.diff + c.miss],
+    ["all", "k-all", "Our stocks", c.scope],
     ["ok", "k-ok", "Matched", c.ok],
     ["diff", "k-diff", "Qty difference", c.diff],
     ["miss", "k-miss", "Missing in client", c.miss],
   ];
   if (showExtra.checked) K.push(["extra", "k-extra", "Client's other stocks", c.extra]);
-  document.getElementById("kpis").style.gridTemplateColumns = window.innerWidth > 900 ? `repeat(${K.length},1fr)` : "";
-  document.getElementById("kpis").innerHTML = K.map(([f, cls, l, n]) =>
+  const KP = document.getElementById("kpis");
+  KP.style.gridTemplateColumns = window.innerWidth > 900 ? `repeat(${K.length},1fr)` : "";
+  KP.innerHTML = K.map(([f, cls, l, n]) =>
     `<div class="kpi ${cls} ${FILTER === f ? "active" : ""}" data-f="${f}"><small>${l}</small><b>${n}</b></div>`).join("");
-  document.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => { FILTER = k.dataset.f; renderResults(); }));
+  KP.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => { FILTER = k.dataset.f; renderResults(); }));
   renderTable();
 }
 
 const ORDER = { miss: 0, diff: 1, extra: 2, ok: 3 };
+const sortRows = rows => [...rows].sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name));
 function renderTable() {
   const q = clean(document.getElementById("q").value).toUpperCase();
-  const rows = RESULT
+  const rows = sortRows(RESULT
     .filter(r => FILTER === "all" || r.st === FILTER)
-    .filter(r => !q || (r.name + " " + r.alt + " " + r.isin).toUpperCase().includes(q))
-    .sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name));
+    .filter(r => !q || (r.name + " " + r.alt + " " + r.isin).toUpperCase().includes(q)));
   document.getElementById("shownCt").textContent = `${rows.length} of ${RESULT.length} rows`;
   const B = document.getElementById("resBody");
   if (!rows.length) { B.innerHTML = `<tr><td colspan="8" class="empty">No rows to show.</td></tr>`; return; }
@@ -1096,26 +1368,114 @@ function renderTable() {
   }).join("");
 }
 
-matchBtn.addEventListener("click", () => runMatch(true));
-showExtra.addEventListener("change", () => ALL && applyView());
-document.getElementById("q").addEventListener("input", () => RESULT && renderTable());
+showExtra.addEventListener("change", () => CUR && applyView());
+document.getElementById("q").addEventListener("input", () => CUR && renderTable());
 
-document.getElementById("exportBtn").addEventListener("click", () => {
-  if (!RESULT) return;
-  const label = { ok: "Matched", diff: "Qty differs", miss: "Missing in client", extra: "Only in client" };
-  const data = [...RESULT].sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name)).map((r, i) => ({
+/* ---------------- Excel export ---------------- */
+const LABEL = { ok: "Matched", diff: "Qty differs", miss: "Missing in client", extra: "Only in client" };
+function resultSheet(res, withExtra) {
+  const rows = sortRows(withExtra ? res.all : res.all.filter(r => r.st !== "extra"));
+  const ws = XLSX.utils.json_to_sheet(rows.map((r, i) => ({
     "#": i + 1, "Stock": r.name, "Client name for stock": r.alt, "ISIN": r.isin,
     "Our Qty": r.our ?? "", "Client Qty": r.cli ?? "",
     "Difference (Client - Ours)": r.st === "miss" ? -r.our : r.st === "extra" ? r.cli : (Number.isNaN(r.diff) ? "" : r.diff),
-    "Status": label[r.st], "Matched by": r.via,
-  }));
-  const ws = XLSX.utils.json_to_sheet(data);
+    "Status": LABEL[r.st], "Matched by": r.via,
+  })));
   ws["!cols"] = [{ wch: 4 }, { wch: 42 }, { wch: 32 }, { wch: 15 }, { wch: 11 }, { wch: 11 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
+  return ws;
+}
+const fileSafe = s => clean(s || "Client").replace(/[^\w ]+/g, "").trim().replace(/\s+/g, "_") || "Client";
+const today = () => new Date().toISOString().slice(0, 10);
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  if (!CUR) return;
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Holding Match");
-  const who = (ours.clientName || client.clientName || "Client").replace(/[^\w ]+/g, "").trim().replace(/\s+/g, "_");
-  XLSX.writeFile(wb, `Holding_Match_${who}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, resultSheet(CUR, showExtra.checked), "Holding Match");
+  XLSX.writeFile(wb, `Holding_Match_${fileSafe(CUR.client)}_${today()}.xlsx`);
 });
+
+document.getElementById("exportAll").addEventListener("click", () => {
+  const rs = clientSide.units.map(cu => pairOf(cu).result).filter(Boolean);
+  if (!rs.length) return;
+  const wb = XLSX.utils.book_new();
+  const summary = XLSX.utils.json_to_sheet(rs.map((r, i) => ({
+    "#": i + 1, "Client statement": r.client, "Client file": r.clientSrc, "Our client": r.ours,
+    "Result": r.sum.ok_ ? "MATCHED" : "NOT MATCHED", "Match %": r.sum.pct,
+    "Our stocks": r.sum.scope, "Matched": r.sum.ok, "Qty differs": r.sum.diff, "Missing in client": r.sum.miss,
+  })));
+  summary["!cols"] = [{ wch: 4 }, { wch: 32 }, { wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 9 }, { wch: 11 }, { wch: 9 }, { wch: 11 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, summary, "Summary");
+  const used = new Set(["Summary"]);
+  rs.forEach((r, i) => {
+    let n = `${i + 1} ${r.client}`.replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 31).trim();
+    while (used.has(n)) n = n.slice(0, 28) + "~" + i;
+    used.add(n);
+    XLSX.utils.book_append_sheet(wb, resultSheet(r, false), n);
+  });
+  XLSX.writeFile(wb, `Holding_Match_All_${today()}.xlsx`);
+});
+
+/* ======================================================================
+   Match history ("memory") – kept in this browser's local storage
+   ====================================================================== */
+const HKEY = "holdingMatchHistory.v1";
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HKEY) || "[]"); } catch { return []; }
+}
+function storeHistory(list) {
+  for (let n = list.length; n > 0; n = Math.floor(n * 0.7)) {
+    try { localStorage.setItem(HKEY, JSON.stringify(list.slice(0, n))); return; } catch { /* quota – keep fewer */ }
+  }
+}
+function saveHistory(res, replaceId) {
+  const list = loadHistory().filter(h => h.id !== replaceId);
+  const id = "h" + Date.now() + Math.random().toString(36).slice(2, 6);
+  // NaN does not survive JSON – store unreadable quantities as null with a flag
+  const all = res.all.map(r => ({ ...r, diff: Number.isNaN(r.diff) ? null : r.diff,
+    cli: Number.isNaN(r.cli) ? null : r.cli, our: Number.isNaN(r.our) ? null : r.our }));
+  list.unshift({ id, ts: res.ts, client: res.client, clientSrc: res.clientSrc, ours: res.ours, oursSrc: res.oursSrc, sum: res.sum, all });
+  storeHistory(list.slice(0, 200));
+  renderHistory();
+  return id;
+}
+function renderHistory() {
+  const list = loadHistory();
+  document.getElementById("histCt").textContent = `${list.length} saved`;
+  document.getElementById("histClear").disabled = !list.length;
+  const B = document.getElementById("histBody");
+  if (!list.length) { B.innerHTML = `<tr><td colspan="5" class="empty">No matches yet. Every match you run is saved here.</td></tr>`; return; }
+  B.innerHTML = list.map(h => `<tr data-id="${h.id}">
+    <td class="mono" style="white-space:nowrap">${new Date(h.ts).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</td>
+    <td><div class="sname">${esc(h.client)}</div><div class="salt">${esc(h.clientSrc)}</div></td>
+    <td><div class="sname">${esc(h.ours)}</div><div class="salt">${esc(h.oursSrc)}</div></td>
+    <td><span class="vchip ${h.sum.ok_ ? "ok" : "bad"}">${h.sum.ok_ ? "✓ MATCHED" : "✕ NOT MATCHED"}</span>
+      <div class="vsub">${h.sum.pct}% · ${h.sum.ok}/${h.sum.scope}${h.sum.diff ? ` · ${h.sum.diff} qty diff` : ""}${h.sum.miss ? ` · ${h.sum.miss} missing` : ""}</div></td>
+    <td class="n" style="white-space:nowrap"><button class="btn mini" data-open>Open</button> <button class="x" data-del title="Delete" style="display:inline-grid;vertical-align:middle">×</button></td></tr>`).join("");
+  B.querySelectorAll("tr[data-id]").forEach(tr => {
+    const id = tr.dataset.id;
+    tr.querySelector("[data-open]").addEventListener("click", () => {
+      const h = loadHistory().find(x => x.id === id);
+      if (!h) return;
+      h.all.forEach(r => { if (r.unread) { r.diff = NaN; } });
+      showResult(h, true);
+    });
+    tr.querySelector("[data-del]").addEventListener("click", () => {
+      storeHistory(loadHistory().filter(x => x.id !== id));
+      PAIRS.forEach(p => { if (p.histId === id) p.histId = null; });
+      renderHistory();
+    });
+  });
+}
+document.getElementById("histClear").addEventListener("click", () => {
+  if (!confirm("Delete all saved match history from this browser?")) return;
+  try { localStorage.removeItem(HKEY); } catch {}
+  PAIRS.forEach(p => p.histId = null);
+  renderHistory();
+});
+
+renderHistory();
+refresh();
+
 </script>
 </body>
 </html>
