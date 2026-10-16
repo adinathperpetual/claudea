@@ -620,29 +620,79 @@ function findHeader(rows) {
   return null;
 }
 
-function detectCustomer(rows, upto) {
-  for (let r = 0; r < Math.min(upto, rows.length); r++) {
+/* Client-name detection. Returns { name, conf }:
+   conf "label"  – found next to a label such as "Client Name :"
+   conf "person" – a line above the holdings table that looks like a person's name
+   conf "title"  – only a document title was found (weak; file name is preferred) */
+const NAME_STOP = new Set(("statement portfolio holding holdings report as on of at date dated period page equity equities demat " +
+  "account accounts summary valuation transaction transactions limited ltd securities security broking brokers broker capital " +
+  "financial finance services service bank pvt private india total value market client customer name code address branch dp id " +
+  "nse bse cdsl nsdl isin scrip qty quantity open opening closing balance mutual fund funds wealth investment investments stock " +
+  "stocks shares share trading details detail sr no consolidated the for to from and tel phone email mobile pan ucc gst road " +
+  "street nagar floor near opp sector plot flat apartment society east west north south city state pin district taluka " +
+  "jan feb mar apr may jun jul aug sep sept oct nov dec january february march april june july august september october " +
+  "november december copy generated print printed system computer signature authorised authorized currency inr rs " +
+  "product type segment exchange depository participant beneficiary bo trading ltd. pvt. private. corp corporation " +
+  "group associates enterprises industries technologies solutions holdings ventures advisors advisory partners llp").split(" "));
+const TITLE_RE = /^(mr|mrs|ms|miss|shri|smt|kum|dr|m\/s)\.?$/i;
+function personName(text) {
+  const t = clean(text).replace(/^[:\-–\s]+|[:\-–\s]+$/g, "");
+  if (!t || t.length > 60 || /\d|@|[|/\\(),]/.test(t.replace(/^m\/s\.?\s*/i, ""))) return "";
+  const words = t.split(/\s+/).filter(w => !TITLE_RE.test(w));
+  if (words.length < 2 || words.length > 5) return "";
+  if (!words.every(w => /^[A-Za-z][A-Za-z.'-]*$/.test(w))) return "";
+  if (words.some(w => NAME_STOP.has(w.toLowerCase().replace(/\.$/, "")))) return "";
+  return words.join(" ");
+}
+function nameFromFileName(fileName) {
+  const words = baseName(fileName)
+    .replace(/\(\d+\)/g, " ")
+    .replace(/(holding|holdings|statement|portfolio|equity|report|demat|cas|summary)/gi, " $1 ")
+    .split(/[\s_.\-+,]+/)
+    .filter(w => w && /^[A-Za-z]+$/.test(w) && !NAME_STOP.has(w.toLowerCase()) && !/^(copy|cas|final|new|old|file|doc|scan|img|image|pdf|xlsx?|csv|download|downloads|export|sample)$/i.test(w));
+  return words.length >= 1 && words.length <= 5 ? words.join(" ") : "";
+}
+function detectCustomerInfo(rows, upto) {
+  const lim = Math.min(upto, rows.length);
+  const LABEL = /^(customer|client|account|holder|investor|first holder|sole holder|sole \/ first holder|beneficiary|bo|account holder)\s*(name)?\s*[:\-]?$|^name(\s*of\s*(the\s*)?(client|holder|investor|account holder|customer))?\s*[:\-]?$/i;
+  const INLINE = /^(?:(?:customer|client|account|holder|investor|first holder|sole holder|beneficiary|bo|account holder)\s*name|name(?:\s*of\s*(?:the\s*)?(?:client|holder|investor|customer))?)\s*[:\-]\s*(.+)$/i;
+  // 1. labelled name
+  for (let r = 0; r < lim; r++) {
     const row = (rows[r] || []).map(clean);
-    const li = row.findIndex(c => /^(customer|client|account|holder|investor|first holder)\s*(name)?\s*:?$/i.test(c) || /^name\s*of\s*(the\s*)?(client|holder|investor)/i.test(c));
-    if (li >= 0) { const v = row.slice(li + 1).find(Boolean); if (v) return v; }
-    const inline = row.find(c => /^(customer|client|investor)\s*name\s*[:\-]\s*\S/i.test(c));
-    if (inline) return inline.replace(/^.*?name\s*[:\-]\s*/i, "");
+    for (let i = 0; i < row.length; i++) {
+      const c = row[i];
+      if (LABEL.test(c)) {
+        const v = row.slice(i + 1).find(Boolean);
+        if (v && /[A-Za-z]{2}/.test(v) && !/^\d/.test(v)) return { name: v.replace(/^[:\-\s]+/, ""), conf: "label" };
+      }
+      const m = c.match(INLINE);
+      if (m && /[A-Za-z]{2}/.test(m[1])) return { name: m[1].split(/\s{2,}|\s+(?:client|ucc|pan|code|dp)\b/i)[0].trim(), conf: "label" };
+    }
   }
-  // title row like "NAGORI BHARAT MITHALAL HUF      Holding As On:01-Oct-2026"
-  for (let r = 0; r < Math.min(upto, rows.length); r++) {
+  // 2. first cell above the table that looks like a person's name (titles, dates, addresses are skipped)
+  for (let r = 0; r < lim; r++) {
+    for (const c of (rows[r] || []).map(v => String(v ?? ""))) {
+      if (!c.trim()) continue;
+      const lead = c.split(/\s{3,}|holding\s*as/i)[0];
+      const n = personName(lead) || personName(c);
+      if (n) return { name: n, conf: "person" };
+    }
+  }
+  // 3. weak: first text line (usually a title)
+  for (let r = 0; r < lim; r++) {
     const first = (rows[r] || []).map(v => String(v ?? "")).find(c => c.trim());
     if (first && /[A-Za-z]{3}/.test(first)) {
       const t = first.split(/\s{3,}|holding\s*as/i)[0].trim();
-      if (t && t.length <= 70 && !ISIN_RE.test(t)) return t;
+      if (t && t.length <= 70 && !ISIN_RE.test(t)) return { name: t, conf: "title" };
     }
   }
-  return "";
+  return { name: "", conf: "" };
 }
 
 function parseTable(rows) {
-  const out = { holdings: [], customer: "", header: false };
+  const out = { holdings: [], customer: "", customerConf: "", header: false };
   const H = findHeader(rows);
-  out.customer = detectCustomer(rows, H ? H.r : 15);
+  ({ name: out.customer, conf: out.customerConf } = detectCustomerInfo(rows, H ? H.r : 15));
   if (!H) { out.holdings = parseHeuristic(rows); return out; }
   out.header = true;
   let group = "";
@@ -768,7 +818,13 @@ function parseLines(lines) {
   const b = parseHeuristic(raw);
   const good = h => h.filter(x => !Number.isNaN(x.qty)).length;
   if (good(b) > good(a.holdings)) a.holdings = b;
-  if (!a.customer) a.customer = detectCustomer(raw, 15);
+  if (a.customerConf !== "label" && a.customerConf !== "person") {
+    // header row index differs between aligned and raw lines, so look again in the raw lines above the table
+    const H = findHeader(raw);
+    const d = detectCustomerInfo(raw, H ? H.r : 15);
+    const rank = { label: 3, person: 2, title: 1, "": 0 };
+    if (rank[d.conf] > rank[a.customerConf]) { a.customer = d.name; a.customerConf = d.conf; }
+  }
   return a;
 }
 
@@ -874,16 +930,19 @@ function unitsFromFile(side, fileName, kind, sheets) {
     const p = sheets[sn];
     if (!p.holdings.length && names.length > 1) continue;
     const groups = [...new Set(p.holdings.map(h => h.group).filter(Boolean))];
-    const mk = (name, holdings) => out.push({
+    const mk = (name, holdings, weak = false) => out.push({ nameWeak: weak,
       id: ++UID, side, fileId, file: fileName, kind, sheet: names.length > 1 ? sn : "",
       name: clean(name) || baseName(fileName), customer: p.customer || "", holdings: copyH(holdings)
     });
+    // Name priority: labelled / person-like name inside the file → name in the file name → title line → sheet / file
+    const strong = p.customerConf === "label" || p.customerConf === "person";
+    const accName = strong ? p.customer : (nameFromFileName(fileName) || p.customer);
     if (groups.length) {
       groups.forEach(g => mk(g, p.holdings.filter(h => h.group === g)));
       const loose = p.holdings.filter(h => !h.group);
-      if (loose.length) mk(p.customer || sn, loose);
+      if (loose.length) mk(accName || sn, loose, !strong && !nameFromFileName(fileName));
     } else {
-      mk(p.customer || (names.length > 1 ? sn : baseName(fileName)), p.holdings);
+      mk(accName || (names.length > 1 ? sn : baseName(fileName)), p.holdings, !strong && !nameFromFileName(fileName));
     }
   }
   return out;
@@ -971,6 +1030,7 @@ class Side {
           <div class="sub" title="${esc(u.file)}">${esc(u.file)}${u.sheet ? " · sheet " + esc(u.sheet) : ""}</div>
           <div class="tags">
             <span class="tag ${hs.length ? "ok" : "warn"}">${hs.length} stocks</span>
+            ${u.nameWeak ? `<span class="tag warn">⚠ Client name not found – click ✎ to set</span>` : ""}
             ${bad ? `<span class="tag warn">⚠ ${bad} unreadable qty</span>` : ""}
             ${noIsin ? `<span class="tag">No ISIN – by name</span>` : ""}
             ${notes ? `<span class="tag">${notes} from Free+Pledge</span>` : ""}
@@ -978,6 +1038,7 @@ class Side {
           </div>
         </div>
         <div class="acts">
+          <button class="btn mini" data-rename title="Rename this account">✎</button>
           <button class="btn mini" data-review>Review</button>
           <button class="x" data-rm title="Remove">×</button>
         </div></div>`;
@@ -985,6 +1046,12 @@ class Side {
     box.querySelectorAll(".unit").forEach(el => {
       const u = this.units.find(x => x.id === +el.dataset.id);
       el.querySelector("[data-review]").addEventListener("click", () => openReview(u));
+      el.querySelector("[data-rename]").addEventListener("click", () => {
+        const v = prompt("Client name for this account:", u.name);
+        if (v == null || !clean(v)) return;
+        u.name = clean(v); u.customer = u.name; u.nameWeak = false;
+        this.render(); onUnitEdited(u);
+      });
       el.querySelector("[data-rm]").addEventListener("click", () => this.remove(u));
     });
   }
