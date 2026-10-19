@@ -302,6 +302,8 @@
   .sugg{display:inline-block;margin-top:5px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);
     border-radius:999px;font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer}
   .sugg:hover{background:#e2e5ff}
+  .autotag{display:inline-block;margin-top:5px;border:1px solid var(--green-line);background:var(--green-soft);color:var(--green);
+    border-radius:999px;font-size:11px;font-weight:600;padding:2px 9px}
   .vchip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;color:#fff;white-space:nowrap}
   .vchip.ok{background:var(--grad-green)} .vchip.bad{background:var(--grad-red)}
   .vchip.idle{background:var(--surface-3);color:var(--muted);font-weight:600}
@@ -1203,6 +1205,35 @@ function suggestFor(cu) {
   return bs >= 0.6 ? best : null;
 }
 
+/* Same person? Used to pair accounts automatically, so it only accepts clear cases:
+   identical names, or same first + last name with middle names left out or given as initials
+   ("Jayesh Oswal" = "JAYESH VIJAYRAJ OSWAL", "Bharat M Nagori" = "BHARAT MITHALAL NAGORI"),
+   also when one side writes the surname first. An HUF never pairs with an individual. */
+const nameTokens = s => normName(s).split(" ").filter(w => w && !TITLE_RE.test(w));
+function samePerson(a, b) {
+  const A = nameTokens(a), B = nameTokens(b);
+  if (A.includes("HUF") !== B.includes("HUF")) return false;
+  const a2 = A.filter(w => w !== "HUF"), b2 = B.filter(w => w !== "HUF");
+  if (!a2.length || !b2.length) return false;
+  if (a2.join(" ") === b2.join(" ")) return a2.join("").length >= 4;
+  if (a2.length < 2 || b2.length < 2) return false;
+  const [S, L] = a2.length <= b2.length ? [a2, b2] : [b2, a2];
+  const first = S[0], last = S[S.length - 1];
+  if (first.length < 2 || last.length < 2) return false;
+  const midOK = (sm, lm) => sm.every(w => w.length === 1 ? lm.some(x => x[0] === w) : lm.includes(w));
+  if (first === L[0] && last === L[L.length - 1] && midOK(S.slice(1, -1), L.slice(1, -1))) return true;
+  if (L[0] === last && L[1] === first && midOK(S.slice(1, -1), L.slice(2))) return true;      // "OSWAL JAYESH ..." vs "Jayesh Oswal"
+  if (first === L[L.length - 1] && S[1] === L[0] && midOK(S.slice(2), L.slice(1, -1))) return true; // "Oswal Jayesh" vs "JAYESH ... OSWAL"
+  return false;
+}
+function autoFor(cu) {
+  const hits = ourChoices().filter(ch => !ch.combined &&
+    (samePerson(ch.label, cu.name) || (cu.customer && samePerson(ch.label, cu.customer))));
+  if (hits.length === 1) return hits[0];
+  const exact = hits.filter(ch => compact(ch.label) === compact(cu.name));
+  return exact.length === 1 ? exact[0] : null;   // two equally good candidates → let the user decide
+}
+
 function pairOf(cu) {
   if (!PAIRS.has(cu.id)) PAIRS.set(cu.id, { ourKey: "", result: null, histId: null });
   return PAIRS.get(cu.id);
@@ -1255,7 +1286,15 @@ function refresh() {
   card.classList.toggle("on", cus.length > 0 || oursSide.units.length > 0);
   const choices = ourChoices();
   // drop selections pointing at removed clients
-  PAIRS.forEach(p => { if (p.ourKey && !choices.some(c => c.key === p.ourKey)) { p.ourKey = ""; p.result = null; } });
+  PAIRS.forEach(p => { if (p.ourKey && !choices.some(c => c.key === p.ourKey)) { p.ourKey = ""; p.result = null; p.auto = false; p.touched = false; } });
+  // Pair automatically when the names clearly belong to the same person (never overrides a manual choice)
+  for (const cu of cus) {
+    const p = pairOf(cu);
+    if (p.touched || p.result || (p.ourKey && !p.auto)) continue;
+    const a = autoFor(cu);
+    const k = a ? a.key : "";
+    if (k !== p.ourKey) { p.ourKey = k; p.auto = !!a; p.histId = null; }
+  }
 
   const paired = cus.filter(cu => pairOf(cu).ourKey).length;
   document.getElementById("pairCt").textContent = `${paired} of ${cus.length} paired`;
@@ -1283,6 +1322,7 @@ function refresh() {
         <td class="mono" style="color:var(--muted-2)">${i + 1}</td>
         <td><div class="sname">${esc(cu.name)}</div><div class="salt">${esc(cu.file)}${cu.sheet ? " · " + esc(cu.sheet) : ""} · ${cu.holdings.length} stocks</div></td>
         <td><select class="${p.ourKey ? "" : "need"}">${opts(p.ourKey)}</select>
+          ${p.auto ? `<br><span class="autotag">✓ Auto-paired by name</span>` : ""}
           ${sug ? `<br><button class="sugg" data-sug="${sug.key}">Suggested: ${esc(sug.label)} – click to select</button>` : ""}</td>
         <td>${res}</td>
         <td class="n" style="white-space:nowrap">
@@ -1291,7 +1331,7 @@ function refresh() {
     }).join("");
     B.querySelectorAll("tr[data-id]").forEach(tr => {
       const cu = cus.find(u => u.id === +tr.dataset.id), p = pairOf(cu);
-      const setKey = k => { p.ourKey = k; p.result = null; p.histId = null; if (CUR && !CUR.fromHistory && CUR.cuId === cu.id) hideResult(); refresh(); };
+      const setKey = k => { p.ourKey = k; p.touched = true; p.auto = false; p.result = null; p.histId = null; if (CUR && !CUR.fromHistory && CUR.cuId === cu.id) hideResult(); refresh(); };
       tr.querySelector("select").addEventListener("change", e => setKey(e.target.value));
       tr.querySelector("[data-sug]")?.addEventListener("click", e => setKey(e.target.dataset.sug));
       tr.querySelector("[data-match]").addEventListener("click", () => { runPair(cu); refresh(); });
