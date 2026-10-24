@@ -1421,6 +1421,146 @@ function extractIciciSummary(lines){
   return out;
 }
 
+/* MOTILAL OSWAL "EQUITY SEGMENT" summary reader.
+   Motilal's text layer is transposed: each text line carries ONE field for every
+   summary column side by side ("Quantity 100 442", "WAP 1842.7715 1839.6552",
+   "Brokerage per Share 0.9214 0.9722", "WAP after brokerage 1843.6929 1840.6274",
+   "Total BUY Value after brokerage 184369.2890 813557.3286"), one column per
+   ISIN row (the same ISIN can appear once per exchange). So the per-line
+   arithmetic used for other brokers never sees a whole row. Here every line with
+   exactly one number per column becomes a vector, and for each column the trade
+   is the combination that satisfies BOTH
+       WAP ± brokerage/share = WAP after brokerage   (+ for BUY, - for SELL)
+       quantity × WAP after brokerage = total value
+   Columns of the same ISIN + side are then combined (qty summed, WAP weighted).
+   The per-trade "Exchange-wise details" section is never read. */
+function extractMotilal(lines){
+  const ISIN_G = new RegExp(ISIN_RE.source, "g");
+  const DETAIL = /net\s*rate\s*per\s*unit|exchange\s*-?\s*wise\s*details/i;
+  const cut = lines.findIndex(l => DETAIL.test(l.text));
+  const pickIsins = ls => { let best = [];
+    for (const l of ls){ const m = l.text.match(ISIN_G); if (m && m.length > best.length) best = m; } return best; };
+  let region = cut > 0 ? lines.slice(0, cut) : lines;
+  let isins = pickIsins(region);
+  if (!isins.length){ region = lines; isins = pickIsins(lines); }
+  const N = isins.length;
+  if (!N) return [];
+
+  // number vectors: lines carrying exactly N numbers ("Page 1" page labels ignored)
+  const vecs = [];
+  for (const l of region){
+    const nums = []; let prev = "";
+    for (const p of l.parts){
+      const toks = p.str.trim().split(/\s+/).filter(Boolean);
+      toks.forEach((t,k) => {
+        if (NUMTOK.test(t) && !/^page$/i.test(prev)) nums.push({ v: num(t), cx: p.x + p.w*(k+0.5)/toks.length });
+        prev = t;
+      });
+    }
+    if (nums.length === N && nums.every(o => !isNaN(o.v)))
+      vecs.push({ v: nums.map(o => o.v), cx: nums.map(o => o.cx), text: l.text });
+  }
+
+  const labelSide = t => /\bsell\b/i.test(t) ? "Sell" : /\bbuy\b/i.test(t) ? "Buy" : "";
+  const found = [];   // one entry per distinct trade per column
+  for (let j=0;j<N;j++){
+    const byKey = new Map();
+    for (const Q of vecs){
+      const q = Q.v[j]; if (!(q > 0) || !Number.isInteger(q)) continue;
+      for (const NT of vecs){
+        if (NT === Q) continue;
+        const net = NT.v[j]; if (!(net > 0)) continue;
+        for (const VV of vecs){
+          if (VV === Q || VV === NT) continue;
+          const val = Math.abs(VV.v[j]); if (!(val > 0)) continue;
+          if (Math.abs(val - q*net) > Math.max(0.02, q*1e-4 + 0.01)) continue;
+          // gross WAP + brokerage/share must reproduce the after-brokerage WAP
+          let side = "", gross = NaN;
+          for (const G of vecs){
+            if (G === NT || G === Q || G === VV) continue;
+            const g = G.v[j]; if (!(g > 0)) continue;
+            for (const B of vecs){
+              if (B === G || B === NT || B === Q || B === VV) continue;
+              const b = B.v[j]; if (!(b >= 0) || b >= g) continue;   // brokerage is a small add-on to the price
+              const tol = Math.max(0.0006, g*1e-6);
+              if (b > 0 && Math.abs(g + b - net) <= tol){ side = "Buy"; gross = g; break; }
+              if (b > 0 && Math.abs(g - b - net) <= tol){ side = "Sell"; gross = g; break; }
+              if (b === 0 && Math.abs(g - net) <= tol && isNaN(gross)) gross = g;   // zero brokerage
+            }
+            if (side) break;
+          }
+          if (isNaN(gross)) continue;
+          if (!side) side = labelSide(VV.text) || labelSide(NT.text);
+          const key = q + "|" + net.toFixed(4);
+          const prev = byKey.get(key);
+          if (!prev) byKey.set(key, { j, q, net, gross, side });
+          else if (!prev.side && side) prev.side = side;
+        }
+      }
+    }
+    byKey.forEach(t => found.push({ ...t, side: t.side || "Buy" }));
+  }
+  if (!found.length) return [];
+
+  // Scrip names. One distinct ISIN: the per-trade description repeats the name
+  // ("Network People Services Techno Network People Services Techno ..."), so its
+  // repeating unit is the name. Otherwise split the "Security Name" value line
+  // across the columns by x-position.
+  const names = new Array(N).fill("");
+  if (new Set(isins).size === 1){
+    const di = lines.findIndex(l => /security\s*\/?\s*contract\s*description/i.test(l.text));
+    for (let i=di+1; di>=0 && i<Math.min(di+6, lines.length); i++){
+      const w = lines[i].text.split(/\s+/);
+      if (w.filter(x => /^[A-Za-z]{2,}$/.test(x)).length < 2) continue;
+      let unit = "";
+      for (let k=1; k<=w.length/2 && !unit; k++)
+        if (w.slice(0,k).join(" ").toUpperCase() === w.slice(k,2*k).join(" ").toUpperCase()) unit = w.slice(0,k).join(" ");
+      if (unit) names.fill(unit);
+      break;
+    }
+  }
+  if (names.some(n => !n)){
+    const anchors = isins.map((_, j) => {
+      const xs = vecs.map(v => v.cx[j]).sort((a,b) => a-b); return xs[Math.floor(xs.length/2)] || 0;
+    });
+    const si = region.findIndex(l => /security\s*name/i.test(l.text));
+    const nl = si >= 0 ? region.slice(si+1, si+4).find(l => /[A-Za-z]{3,}/.test(l.text) && !ISIN_RE.test(l.text)) : null;
+    // The names are separate blocks on the line (wide gaps between columns), so
+    // when there is exactly one text block per column, take them in order.
+    const blocks = nl ? nl.cells.filter(c => /[A-Za-z]{2,}/.test(c.text)) : [];
+    if (blocks.length === N) blocks.forEach((c,j) => { if (!names[j]) names[j] = c.text; });
+    else if (nl){
+      const cols = isins.map(() => []);
+      for (const p of nl.parts){
+        const toks = p.str.trim().split(/\s+/).filter(Boolean);
+        toks.forEach((t,k) => {
+          const cx = p.x + p.w*(k+0.5)/toks.length;
+          let bj = 0; anchors.forEach((a,j) => { if (Math.abs(a - cx) < Math.abs(anchors[bj] - cx)) bj = j; });
+          cols[bj].push(t);
+        });
+      }
+      cols.forEach((c,j) => { if (!names[j] && c.length) names[j] = c.join(" "); });
+    }
+  }
+
+  // combine columns per ISIN + side
+  const agg = new Map();
+  for (const t of found){
+    const iso = isins[t.j], k = iso + "||" + t.side;
+    if (!agg.has(k)) agg.set(k, { isin: iso, side: t.side, qty: 0, notional: 0, grossN: 0, fills: 0, name: "" });
+    const a = agg.get(k);
+    a.qty += t.q; a.notional += t.q * t.net; a.grossN += t.q * t.gross; a.fills++;
+    const nm = cleanScrip(names[t.j] || "");
+    if (nm.length > a.name.length) a.name = nm;
+  }
+  return [...agg.values()].map(a => ({
+    scrip: a.name || a.isin, isin: a.isin, side: a.side, qty: a.qty,
+    wap: Math.round((a.notional / a.qty) * 1e4) / 1e4,
+    gross: Math.round((a.grossN / a.qty) * 1e4) / 1e4,
+    basis: "After brokerage ✓ verified", conf: "verified", fills: a.fills,
+  }));
+}
+
 function extractTradesInner(lines){
   const fullText = lines.map(l => l.text).join("\n");
   const wantsNet = /after\s*brokerage/i.test(fullText);
@@ -1430,6 +1570,14 @@ function extractTradesInner(lines){
   // holding statements — are not contract notes and must yield no "trades".
   if (!ISIN_RE.test(fullText))
     return { trades: [], reason: "no-isin (not an equity contract note)", diag: null };
+
+  // Motilal Oswal: transposed summary table — dedicated reader (see extractMotilal).
+  if (/motilal\s*oswal/i.test(fullText)){
+    const mo = extractMotilal(lines);
+    if (mo.length) return { trades: mo, reason: "ok",
+      diag: { header: "Motilal Oswal EQUITY SEGMENT summary", roles: ["Motilal transposed summary (one field per line)",
+        "WAP ± brokerage/share = WAP after brokerage, cross-checked against qty × WAP after brokerage = total value"] } };
+  }
 
   // ICICI Direct / ICICI Securities: each scrip is its own "Summary including
   // statutory levies" block with the ISIN, the security name and the Buy/Sell
@@ -1705,6 +1853,24 @@ const cleanName = s => String(s).replace(/\s+/g," ")
   .replace(/[,:;.\s]+$/,"").trim().slice(0,80);
 
 function findClientName(lines){
+  // 0) Motilal Oswal: labels and values are on separate lines. The value line
+  //    starts with the UCC code, then the client name, then the address:
+  //    "AUSFBP3 NAGORI BHARAT MITHALAL HUF FL NO 601 ESPERANZA ...". Take the words
+  //    after the code up to the first address word / number.
+  if (lines.some(l => /motilal\s*oswal/i.test(l.text))){
+    const ADDR_WORD = /^(fl|flat|flr|floor|no\.?|plot|room|rm|house|h\.?no|bldg|building|wing|shop|office|off|c\/o|s\/o|d\/o|w\/o|at|post|po|vill|village|sector|block|street|st|road|rd|lane|near|nr|opp|behind|apartment|apt|society|soc|tower|cts|survey|gali|chawl|bunglow|bungalow|villa|unit|suite|door)$/i;
+    for (const l of lines.slice(0, 120)){
+      const m = l.text.trim().match(/^([A-Z][A-Z0-9]{3,11})\s+(.+)$/);
+      if (!m || !/\d/.test(m[1]) || ISIN_RE.test(m[1])) continue;
+      const out = [];
+      for (const w of m[2].split(/\s+/)){
+        if (/[\d,\/:]/.test(w) || ADDR_WORD.test(w)) break;
+        out.push(w);
+      }
+      const cand = out.join(" ");
+      if (out.length >= 2 && isNameish(cand)) return cleanName(cand);
+    }
+  }
   // A candidate is only accepted if the WHOLE line is a name — this stops stray
   // table cells (e.g. a lone "across" or "tal Buy Qty") that happen to align
   // under an anchor from being mistaken for the client.
@@ -1898,6 +2064,15 @@ function findClientName(lines){
 
 function findTradeDate(lines){
   const full = lines.map(l=>l.text).join("\n");
+  // Motilal Oswal: the "Trade Date" label sits apart from its value; the value
+  // line reads "<Contract Note Number> <dd Mon yyyy>" ("668477 13 Oct 2026"), and
+  // the footer repeats it as "Date : 13 Oct 2026". The generic search would
+  // otherwise grab the settlement date ("- 14/10/2026)").
+  if (/motilal\s*oswal/i.test(full)){
+    const MD = "(\\d{1,2}\\s+[A-Za-z]{3,9}\\s+\\d{4})";
+    for (const l of lines){ const m = l.text.trim().match(new RegExp("^\\d{4,}\\s+"+MD+"$")); if (m) return m[1]; }
+    const f = full.match(new RegExp("\\bdate\\s*:\\s*"+MD, "i")); if (f) return f[1];
+  }
   // day-first with -/. separators (27/07/2026, 11-FEB-26, 20-Aug-2026) OR
   // month-first with spaces (Aug 20 2026, August 20, 2026). Spaces are NOT allowed
   // as day-first separators, so table digits like "...01020 CENTUM 15" can't match.
