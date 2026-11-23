@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Illustration — Finesse client search</title>
+<style>
+  body{margin:0;padding:20px;background:#e9edf3;font-family:Roboto,Arial,sans-serif}
+  #frame{width:980px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.12);position:relative}
+  .bar{background:#1f3a60;color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px;font-size:15px}
+  .bar b{font-size:17px;letter-spacing:.3px}
+  .tag{position:absolute;top:10px;right:12px;background:#fde68a;color:#7c4a03;font:600 11px Arial;padding:4px 10px;border-radius:20px;letter-spacing:.06em}
+  .body{padding:18px 20px 26px}
+  .search{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+  .search input{flex:1;border:2px solid #2563eb;border-radius:6px;padding:10px 12px;font-size:15px;box-shadow:0 0 0 4px rgba(37,99,235,.15)}
+  .search button{background:#1f3a60;color:#fff;border:none;border-radius:6px;padding:11px 18px;font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{background:#f3f5f9;text-align:left;padding:10px;color:#4b5563;font-weight:600;border-bottom:1px solid #e5e7eb}
+  td{padding:12px 10px;border-bottom:1px solid #eef0f4}
+  .act{position:relative}
+  .actbtn{border:2px solid #dc2626;border-radius:6px;padding:6px 12px;background:#fff;font-size:13px;font-weight:600}
+  .menu{position:absolute;right:0;top:40px;width:190px;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 10px 26px rgba(0,0,0,.18);z-index:2}
+  .menu div{padding:10px 14px;font-size:14px;color:#374151}
+  .menu .hl{background:#fee2e2;color:#b91c1c;font-weight:700;outline:2px solid #dc2626;outline-offset:-2px}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#dc2626;color:#fff;font:700 13px Arial;margin-right:6px}
+  .callout{position:absolute;font:600 13px Arial;color:#b91c1c;background:#fff;border:2px solid #dc2626;border-radius:8px;padding:6px 10px}
+</style></head>
+<body><div id="frame">
+  <div class="tag">ILLUSTRATION — SAMPLE DATA</div>
+  <div class="bar"><b>Finesse</b><span style="opacity:.8">Clients</span></div>
+  <div class="body">
+    <div class="search"><span class="num">1</span><input value="ANIL KUMAR GUPTA"><button>Search</button></div>
+    <table>
+      <tr><th>Client Name</th><th>Client Code</th><th>PAN</th><th>Status</th><th style="text-align:right">Actions</th></tr>
+      <tr><td>ANIL KUMAR GUPTA</td><td>AG1003</td><td>BCDXX••••M</td><td>Active</td>
+          <td class="act" style="text-align:right"><span class="num">2</span><button class="actbtn">Actions ▾</button>
+            <div class="menu"><div>Edit</div><div class="hl"><span class="num" style="width:20px;height:20px;font-size:11px">3</span>Profile view</div><div>Documents</div><div>Reports</div></div></td></tr>
+    </table>
+    <div style="height:150px"></div>
+  </div>
+</div></body></html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SOP — Contract Note Extractor (Finesse)</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  @page { size: A4; margin: 15mm 14mm 18mm; }
+  :root{ --ink:#111827; --muted:#5d6779; --line:#d9deea; --accent:#4f46e5; --soft:#eef0ff; --green:#059669; --red:#dc2626; --amber:#b45309; }
+  *{ box-sizing:border-box }
+  body{ font-family:"Inter",Arial,sans-serif; font-size:10.2pt; line-height:1.5; color:#1b2333; margin:0 }
+  h1,h2,h3{ font-family:"Space Grotesk","Inter",Arial,sans-serif; color:var(--ink); letter-spacing:-.01em }
+  h2{ font-size:14.5pt; margin:22px 0 8px; padding-bottom:5px; border-bottom:2px solid var(--accent); break-after:avoid }
+  h3{ font-size:11.5pt; margin:16px 0 6px; break-after:avoid }
+  p{ margin:6px 0 }
+  ol,ul{ margin:6px 0 8px; padding-left:22px }
+  li{ margin:3px 0 }
+  code{ font-family:"IBM Plex Mono",Consolas,monospace; font-size:9pt; background:#f3f4f8; border:1px solid #e4e7ef; border-radius:4px; padding:0 4px }
+  b.ui{ color:var(--accent) }
+  table{ width:100%; border-collapse:collapse; margin:8px 0 10px; font-size:9.3pt; break-inside:avoid }
+  th,td{ border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top }
+  th{ background:#f3f5fa; font-weight:600 }
+  td.n{ text-align:right; font-family:"IBM Plex Mono",Consolas,monospace }
+  figure{ margin:10px 0 14px; break-inside:avoid; text-align:center }
+  figure img{ max-width:100%; border:1px solid var(--line); border-radius:6px }
+  figure.m img{ max-width:78% } figure.s img{ max-width:62% }
+  figcaption{ font-size:8.6pt; color:var(--muted); margin-top:4px }
+  .note,.warn,.tip,.err{ border-radius:6px; padding:8px 12px; margin:10px 0; break-inside:avoid; font-size:9.6pt }
+  .note{ background:var(--soft); border-left:4px solid var(--accent) }
+  .warn{ background:#fff6e6; border-left:4px solid var(--amber) }
+  .tip{ background:#e7f8f1; border-left:4px solid var(--green) }
+  .err{ background:#fdecec; border-left:4px solid var(--red) }
+  .step{ display:flex; gap:10px; align-items:flex-start; margin:10px 0 4px; break-after:avoid; break-inside:avoid }
+  .step .no{ flex:0 0 auto; width:26px; height:26px; border-radius:8px; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff;
+             font:700 11pt "Space Grotesk",Arial; display:grid; place-items:center }
+  .step .tx{ padding-top:2px } .step .tx b{ color:var(--ink) }
+  .cover{ height:250mm; display:flex; flex-direction:column; justify-content:space-between; break-after:page }
+  .cover .band{ background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; border-radius:14px; padding:34px 32px }
+  .cover .band h1{ color:#fff; font-size:29pt; margin:0 }
+  .cover .band .sub{ font-size:12.5pt; opacity:.92; margin-top:6px }
+  .cover .eyebrow{ font-family:"IBM Plex Mono",monospace; font-size:9pt; letter-spacing:.2em; text-transform:uppercase; opacity:.85; margin-bottom:10px }
+  .meta td:first-child{ width:34%; background:#f8f9fc; font-weight:600 }
+  .toc{ columns:2; column-gap:26px; font-size:9.8pt; padding-left:18px }
+  .badge{ display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:8pt; font-weight:600; padding:1px 6px; border-radius:4px; border:1px solid }
+  .b-g{ color:#059669; background:#e7f8f1; border-color:#b5e8d3 } .b-b{ color:#1d4ed8; background:#eaf1ff; border-color:#c3d5fb }
+  .b-a{ color:#b45309; background:#fff6e6; border-color:#f6d9a6 } .b-r{ color:#dc2626; background:#fdecec; border-color:#f7c4c4 }
+  .check td:first-child{ width:26px; text-align:center; font-size:12pt }
+  .pb{ break-before:page }
+  .sample{ font-size:8.6pt; color:var(--muted); font-style:italic }
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<section class="cover">
+  <div class="band">
+    <div class="eyebrow">Standard Operating Procedure · CNE-SOP-02</div>
+    <h1>Contract Note Extractor</h1>
+    <div class="sub">with Finesse Client Master sync and Upload to Finesse — step-by-step procedure</div>
+  </div>
+  <div>
+    <table class="meta">
+      <tr><td>Document number</td><td>CNE-SOP-02</td></tr>
+      <tr><td>Version</td><td>1.0</td></tr>
+      <tr><td>Effective date</td><td>23 Nov 2026</td></tr>
+      <tr><td>Applies to</td><td>Contract Note Extractor installed with <code>ContractNoteExtractor-Setup.exe</code> (Finesse version)</td></tr>
+      <tr><td>Process owner</td><td>&nbsp;</td></tr>
+      <tr><td>Prepared by</td><td>&nbsp;</td></tr>
+      <tr><td>Reviewed by</td><td>&nbsp;</td></tr>
+      <tr><td>Approved by</td><td>&nbsp;</td></tr>
+    </table>
+    <p class="sample">All clients, PANs, codes, accounts and stocks shown in this SOP are invented sample data.</p>
+    <h3>Contents</h3>
+    <ol class="toc">
+      <li>Purpose and scope</li><li>Roles</li><li>Key terms</li><li>Installation</li><li>First start and sign-in</li>
+      <li>The screen at a glance</li><li>Client Master (Finesse sync)</li><li>Output template</li>
+      <li>Daily procedure — step by step</li><li>Errors and how to fix them</li><li>Broker notes</li>
+      <li>Controls and verification</li><li>Security, backup and updates</li>
+      <li>Appendix A — Exceptional-password file</li><li>Appendix B — Status and badge glossary</li>
+      <li>Appendix C — Daily checklist</li><li>Revision history</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================== 1–3 ============================== -->
+<h2>1. Purpose and scope</h2>
+<p>This SOP explains how to turn broker <b>equity contract notes (PDF)</b> into posted transactions in <b>Finesse</b>: the tool unlocks each PDF, extracts <b>client, trading account, stock/ISIN, buy/sell, quantity, rate after brokerage and trade date</b>, fills the output template and uploads it to Finesse Equity Staging, where rows are posted only after your confirmation.</p>
+<ul>
+  <li><b>In scope:</b> equity cash-segment contract notes (delivery and intraday) from the supported brokers (section 11).</li>
+  <li><b>Out of scope:</b> F&amp;O / currency / commodity, scanned image-only PDFs, DP-charges statements and ledgers (ignored automatically).</li>
+  <li>Everything runs <b>on this PC</b>. The tool talks only to Finesse; PDFs and passwords are not sent anywhere else.</li>
+</ul>
+
+<h2>2. Roles</h2>
+<table>
+  <tr><th style="width:22%">Role</th><th>Responsibilities</th></tr>
+  <tr><td><b>Admin</b></td><td>Installs and updates the tool; keeps the Finesse login working; runs <b>Sync from Finesse</b>; maintains <b>exceptional passwords</b>; manages users; uploads to Finesse and confirms posting.</td></tr>
+  <tr><td><b>Operator</b> (normal user)</td><td>Adds contract notes, runs extraction, resolves pop-ups, reviews rows, downloads the filled template. Does not see the Client Master or upload to Finesse.</td></tr>
+  <tr><td><b>Checker</b></td><td>Verifies extracted rows against the contract notes before they are posted (section 12).</td></tr>
+</table>
+
+<h2>3. Key terms</h2>
+<table>
+  <tr><th style="width:26%">Term</th><th>Meaning</th></tr>
+  <tr><td>Client Master</td><td>The client list (name · client code · PAN · trading account) fetched from Finesse every day at 08:00 and on demand.</td></tr>
+  <tr><td>PAN rule</td><td>By default a contract note's password is the client's <b>PAN in capital letters</b>.</td></tr>
+  <tr><td>Exceptional password</td><td>A password that is <b>not</b> the client's PAN. Only these clients are listed in the Client Master screen.</td></tr>
+  <tr><td>Trading account</td><td>The broker trading account (e.g. <code>D100101</code>) shown in Finesse on the client's profile → Portfolios. Needed to upload a row to Finesse.</td></tr>
+  <tr><td>Equity Staging</td><td>The Finesse screen where uploaded transactions wait until they are posted.</td></tr>
+</table>
+
+<!-- ============================== 4–5 ============================== -->
+<h2 class="pb">4. Installation (Admin, once per PC)</h2>
+<div class="step"><div class="no">1</div><div class="tx">Download <b>ContractNoteExtractor-Setup.exe</b> from the "latest" download page (link provided by the tool owner).</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Double-click it. If Windows shows <i>“Windows protected your PC”</i>, click <b>More info → Run anyway</b>. Approve the admin prompt.</div></div>
+<div class="step"><div class="no">3</div><div class="tx">Click <b>Next</b>. Keep the folder <code>C:\Program Files\Contract Note Extractor</code>. On <i>Select Additional Tasks</i> tick <b>Create a desktop shortcut</b>, and tick <b>Start the tool when Windows starts</b> if the daily 08:00 Finesse sync should run automatically.</div></div>
+<div class="step"><div class="no">4</div><div class="tx">Click <b>Install</b>, then <b>Finish</b> with <i>“Open Contract Note Extractor now”</i> ticked.</div></div>
+<div class="step"><div class="no">5</div><div class="tx">The first start opens a setup window. Enter the <b>Finesse User ID</b>, <b>Finesse password</b> (typing is hidden) and the <b>PAN used for Finesse login</b>, then answer <b>Y</b> to test the login. Wait for <span style="color:var(--green);font-weight:600">[OK] Finesse login OK</span>.</div></div>
+<figure class="m"><img src="img/23-setup-console.png" /><figcaption>Figure 1 — First-start setup (sample values)</figcaption></figure>
+<div class="warn"><b>Back up the key file.</b> Setup writes <code>C:\ProgramData\Contract Note Extractor\data\ACCESS_TOKENS.txt</code>. It contains the <b>encryption key</b>; without it saved PANs and passwords cannot be read. Copy it to the secured IT backup location. Do not share it.</div>
+<p>The Start menu folder <b>Contract Note Extractor</b> also has: <b>Change Finesse login</b>, <b>Test Finesse login</b>, <b>Sync clients from Finesse now</b> and <b>Settings and data folder</b>.</p>
+
+<h2>5. First start and sign-in</h2>
+<div class="step"><div class="no">1</div><div class="tx">Open <b>Contract Note Extractor</b> from the desktop. A small console window starts (<b>keep it open</b> — it is the tool's service) and the tool opens in the browser at <code>http://127.0.0.1:8766/</code>.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Sign in with username <code>admin</code> and password <code>admin</code>.</div></div>
+<div class="step"><div class="no">3</div><div class="tx">Choose a new admin password (min. 4 characters), enter it twice and click <b class="ui">Save &amp; continue</b>. Keep <i>“Keep me signed in on this device”</i> ticked on a personal PC — the tool will not ask again until <b>Log out</b>.</div></div>
+<figure class="s"><img src="img/02-new-password.png" /><figcaption>Figure 2 — Setting the admin password on first sign-in</figcaption></figure>
+<div class="step"><div class="no">4</div><div class="tx">Create a user for every person: header <b class="ui">Users</b> → enter username, password, role (<b>Normal user</b> for operators) → <b class="ui">Add user</b>. Use <b>Reset</b> / <b>Disable</b> when needed; the <b>Sign-in log</b> tab records every sign-in.</div></div>
+<figure><img src="img/19-users.png" /><figcaption>Figure 3 — Users and sign-in log (admin only)</figcaption></figure>
+
+<!-- ============================== 6 ============================== -->
+<h2 class="pb">6. The screen at a glance</h2>
+<figure class="m"><img src="img/03-main.png" /><figcaption>Figure 4 — Main screen (admin view)</figcaption></figure>
+<table>
+  <tr><th style="width:30%">Part</th><th>Use</th></tr>
+  <tr><td><b>1 · Contract notes</b></td><td>Add the PDFs. <b>Clear all</b> removes every PDF and its results.</td></tr>
+  <tr><td><b>2 · Client master</b> <i>(admin)</i></td><td>Finesse sync status, Sync from Finesse, exceptional passwords. Click the title to open/close.</td></tr>
+  <tr><td><b>3 · Output template</b> <i>(admin)</i></td><td>Template file and options. Click the title to open/close.</td></tr>
+  <tr><td><b>▶ Extract from all files</b></td><td>Unlocks and reads every PDF.</td></tr>
+  <tr><td><b>Extracted trades</b></td><td>Results, warnings and the export / upload buttons.</td></tr>
+</table>
+
+<!-- ============================== 7 ============================== -->
+<h2>7. Client Master — Finesse sync (Admin)</h2>
+<h3>7.1 Check the connection</h3>
+<div class="step"><div class="no">1</div><div class="tx">Click <b>2 · Client master</b>. The status line must show a <span style="color:var(--green);font-weight:700">green dot — Connected · last synced …</span>. No token has to be entered on this PC.</div></div>
+<figure><img src="img/05-finesse-sync.png" /><figcaption>Figure 5 — Finesse sync connected, one exceptional-password client (sample)</figcaption></figure>
+
+<h3>7.2 Sync clients from Finesse</h3>
+<div class="step"><div class="no">1</div><div class="tx">Sync runs automatically every day at <b>08:00</b> while the tool is running. To refresh now, click <b class="ui">⟳ Sync from Finesse</b> and wait for <i>Last run: success</i>.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Click <b class="ui">Sync log</b> to see each run: fetched, added, updated, missing and errors. A failed run shows the reason (section 10.7).</div></div>
+<figure><img src="img/06-sync-log.png" /><figcaption>Figure 6 — Sync log</figcaption></figure>
+<div class="note">During sync, clients whose trading account is missing in the Finesse client list are looked up on their <b>Finesse profile → Portfolios</b> automatically (re-checked at most every 7 days).</div>
+
+<h3>7.3 Exceptional passwords</h3>
+<p>Default rule: password = <b>PAN in capitals</b>. Add a client here <b>only</b> when the broker uses a different password.</p>
+<div class="step"><div class="no">1</div><div class="tx">Type the <b>client code or trading account</b>, the <b>contract-note password</b> and an optional <b>note</b> (who confirmed it).</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Click <b class="ui">Add exceptional</b>. A password equal to the PAN is refused (the default rule already covers it).</div></div>
+<figure><img src="img/07-add-exceptional.png" /><figcaption>Figure 7 — Adding an exceptional password (sample)</figcaption></figure>
+<ul>
+  <li><b>Bulk:</b> <b class="ui">Import exceptional passwords (.xlsx / .csv)</b> — format in Appendix A. Rows whose password is the PAN are skipped.</li>
+  <li><b>Check / change / remove:</b> <b>👁 Reveal passwords</b>, then <b>Change</b> or <b>✕</b> on the row.</li>
+  <li><b>Offline fallback</b> (lower part of card 2): a local Client Name · Trading Account · Password file, used only if the service is not reachable.</li>
+</ul>
+
+<h2>8. Output template (Admin)</h2>
+<p>A default template is built in. To use your own, open <b>3 · Output template</b> → <b class="ui">Upload new template (.xlsx)</b>. Set the options once; they are remembered.</p>
+<figure><img src="img/08-template.png" /><figcaption>Figure 8 — Output template and options</figcaption></figure>
+<table>
+  <tr><th style="width:32%">Option</th><th>Standard setting</th></tr>
+  <tr><td>Trade Type</td><td><b>Delivery</b> (Intraday only for intraday notes)</td></tr>
+  <tr><td>Transaction Category</td><td><b>MARKET</b></td></tr>
+  <tr><td>Market Price Per Share</td><td><b>Net rate (incl. brokerage)</b></td></tr>
+  <tr><td>Existing template rows</td><td><b>Replace with new data</b></td></tr>
+</table>
+
+<!-- ============================== 9 ============================== -->
+<h2>9. Daily procedure — step by step</h2>
+<div class="step"><div class="no">1</div><div class="tx"><b>Collect the PDFs.</b> Save the day's contract notes in one folder. Keep the broker's file name; if you rename, end it with <code>_&lt;client name&gt;.pdf</code> or include the client code — this helps the password lookup.</div></div>
+<div class="step"><div class="no">2</div><div class="tx"><b>Open the tool</b> from the desktop shortcut (keep the console window open). Check card 2 shows <b>Connected</b>.</div></div>
+<div class="step"><div class="no">3</div><div class="tx"><b>Add the PDFs:</b> drag them onto card <b>1 · Contract notes</b> or click <b class="ui">Choose PDF files</b>. Check the count, e.g. “6 files”.</div></div>
+<figure><img src="img/04-contract-notes.png" /><figcaption>Figure 9 — Contract notes added (sample file names)</figcaption></figure>
+<div class="step"><div class="no">4</div><div class="tx"><b>Extract:</b> click <b class="ui">▶ Extract from all files</b> and wait for the progress bar to finish.</div></div>
+<div class="step"><div class="no">5</div><div class="tx"><b>Resolve every pop-up and coloured bar</b> — locked files, missing trading accounts, unverified prices — exactly as in <b>section 10</b>.</div></div>
+<figure class="m"><img src="img/09-results.png" /><figcaption>Figure 10 — Results straight after extraction, with the typical errors (sample)</figcaption></figure>
+<div class="step"><div class="no">6</div><div class="tx"><b>Review every row</b> against the contract note: client, 🏦 trading account, stock and ISIN, Buy/Sell, quantity, WAP after brokerage, trade date (not settlement date). See Appendix B for the badges.</div></div>
+<figure class="m"><img src="img/15-results-ready.png" /><figcaption>Figure 11 — All rows complete and ready (only the locked file remains)</figcaption></figure>
+<div class="step"><div class="no">7</div><div class="tx"><b>Download</b> <b class="ui">Download filled template</b> and save it with the date, e.g. <code>Template-filled_2026-11-20.xlsx</code> (record of what was uploaded).</div></div>
+<div class="step"><div class="no">8</div><div class="tx"><b>Upload to Finesse</b> (admin) — three stages:</div></div>
+<ol type="a">
+  <li><b>Choose what to upload:</b> click <b class="ui">Upload to Finesse</b>. Rows are grouped by trading account. Untick anything that must not go, click <b class="ui">Upload N selected</b>. Rows without a trading account are left out — fix them first (10.2).</li>
+</ol>
+<figure class="s"><img src="img/16-upload-choose.png" /><figcaption>Figure 12 — Stage a: choose the rows to upload</figcaption></figure>
+<ol type="a" start="2">
+  <li><b>Wait:</b> the tool uploads the file in Finesse and finds the rows in <b>Equity Staging</b>. Keep the page open (<b>Hide</b> closes the window; the job continues — click Upload to Finesse to reopen it).</li>
+  <li><b>Confirm:</b> rows marked <span class="badge b-g">new — will be posted</span> are ticked. <span class="badge b-a">already in staging before this upload</span> is unticked (avoid double posting — tick only if you are sure). <span class="badge b-r">unmapped in Finesse</span> / <span class="badge b-r">not found in staging</span> cannot be posted (10.5). Click <b class="ui">Confirm &amp; Post N selected</b>, or <b>Don't post</b>.</li>
+</ol>
+<figure class="s"><img src="img/17-upload-confirm.png" /><figcaption>Figure 13 — Stage c: tick the rows to post, then Confirm &amp; Post</figcaption></figure>
+<figure class="s"><img src="img/18-upload-posted.png" /><figcaption>Figure 14 — Result: “Posted 2 of 2”</figcaption></figure>
+<div class="step"><div class="no">9</div><div class="tx"><b>Finish:</b> check in Finesse that the posted transactions appear. Then click <b class="ui">Clear all</b> (card 1) so the day's PDFs are removed from the tool.</div></div>
+<div class="tip">New contract notes on screen but an earlier upload exists? The tool asks <b>Open previous lot</b> or <b>Upload current lot (new upload)</b> — choose the current lot for new notes.</div>
+
+<!-- ============================== 10 ============================== -->
+<h2>10. Errors and how to fix them</h2>
+
+<h3>10.1 🔒 Password failed — file stayed locked</h3>
+<p><b>Why:</b> neither the client's PAN nor any exceptional password opened the PDF. The row shows the reason (e.g. <i>“None of the Client Master clients' PANs or saved passwords opens this file — add its password as an exceptional password”</i>).</p>
+<div class="step"><div class="no">1</div><div class="tx">Get the correct password (broker e-mail / client).</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Click <b class="ui">Enter passwords</b> (dark bar) or <b>🔑 Enter password</b> on the row, type it, click <b class="ui">Retry</b>. The file is unlocked and extracted at once.</div></div>
+<figure class="s"><img src="img/10-locked.png" /><figcaption>Figure 15 — Entering the password for a locked file</figcaption></figure>
+<div class="step"><div class="no">3</div><div class="tx"><b>Permanent fix (admin):</b> add the password as an <b>exceptional password</b> for that client (7.3) so it opens automatically next time. If the client is not in Finesse at all, add the client in Finesse and run <b>Sync from Finesse</b>.</div></div>
+
+<h3>10.2 ⚠ Trading account not found</h3>
+<p><b>Why:</b> the client name on the note has no trading account in the Client Master — usually the trading account is not yet on the client's Finesse profile, or the name differs. The row shows <span style="color:var(--red)">⚠ no account — add</span>, a yellow bar appears, and the row cannot be uploaded to Finesse.</p>
+<figure class="s"><img src="img/11-missing-account.png" /><figcaption>Figure 16 — “Trading account needed” pop-up (sample client)</figcaption></figure>
+<p><b>Find the trading account in Finesse:</b></p>
+<div class="step"><div class="no">1</div><div class="tx">In Finesse, <b>search the client name</b>.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">On the client's row click <b>Actions</b>.</div></div>
+<div class="step"><div class="no">3</div><div class="tx">Choose <b>Profile view</b>.</div></div>
+<figure class="m"><img src="img/21-finesse-search.png" /><figcaption>Figure 17 — Finesse: search the client → Actions → Profile view (illustration, sample data)</figcaption></figure>
+<div class="step"><div class="no">4</div><div class="tx">Open the <b>Portfolios</b> section.</div></div>
+<div class="step"><div class="no">5</div><div class="tx">Read <b>“Trading Account : …”</b> under the equity portfolio of the broker that issued the note (e.g. <code>D100103</code>).</div></div>
+<figure class="m"><img src="img/22-finesse-profile.png" /><figcaption>Figure 18 — Finesse: Profile view → Portfolios → Trading Account (illustration, sample data)</figcaption></figure>
+<p><b>Enter it in the tool:</b></p>
+<div class="step"><div class="no">6</div><div class="tx">Click <span style="color:var(--red)">⚠ no account — add</span> (or the link in the yellow bar). In the pop-up type the trading account, keep <b>Add to my master list</b> ticked, click <b class="ui">Save</b>. The account is applied to every row of that client and the yellow bar disappears.</div></div>
+<figure class="s"><img src="img/12-missing-account-filled.png" /><figcaption>Figure 19 — Trading account typed in, then Save</figcaption></figure>
+<div class="warn"><b>If the profile has no trading account:</b> the client's portfolio for that broker has not been set up in Finesse. Ask the Finesse admin to add it before uploading. Once it is on the profile, the next <b>Sync from Finesse</b> picks it up automatically.</div>
+<div class="note"><b>“Did you mean …?”</b> When a similar name exists (missing middle name, different order), the pop-up suggests it with a % match. Pick it only if it is the same person; an HUF never matches an individual.</div>
+
+<h3>10.3 ₹ Price could not be verified</h3>
+<p><b>Why:</b> no brokerage figure was found, so the rate after brokerage is unproven; the row is <b>held back</b> from the template and upload (red bar).</p>
+<div class="step"><div class="no">1</div><div class="tx">Open the contract note and find the <b>rate after brokerage</b> (WAP after brokerage / net rate).</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Type it and click <b class="ui">Confirm</b> — or tick <i>“This note has no brokerage — use the rate as shown”</i> if that is correct. The row is marked <span class="badge b-g">CONFIRMED</span> and released.</div></div>
+<figure class="s"><img src="img/13-price.png" /><figcaption>Figure 20 — Confirming the after-brokerage rate (sample)</figcaption></figure>
+
+<h3>10.4 ⚠ Parse issue — “No trade table found” / “No text layer”</h3>
+<p><b>Why:</b> the PDF is a scanned image, or the broker's layout is not recognised yet (e.g. a client name like “Rem arks” and no trades).</p>
+<div class="step"><div class="no">1</div><div class="tx">Click <b>🔍 Inspect text</b> on the row. If the box is empty, the PDF is a scan — ask the broker for the digital contract note.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Otherwise click <b>Copy text layer</b> and send it, with a screenshot of the note's trade table (client details may be masked), to the tool owner. Do not key the note into Finesse manually without recording it.</div></div>
+<figure class="m"><img src="img/14-inspect.png" /><figcaption>Figure 21 — Inspect text (sample text)</figcaption></figure>
+
+<h3>10.5 Upload: “unmapped in Finesse” / “not found in staging” / “already in staging”</h3>
+<table>
+  <tr><th style="width:32%">Status</th><th>What to do</th></tr>
+  <tr><td><span class="badge b-r">unmapped in Finesse — map it there first</span></td><td>The stock / account mapping is missing in Finesse. Map it in Finesse, then click <b>Upload to Finesse</b> again.</td></tr>
+  <tr><td><span class="badge b-r">not found in staging</span></td><td>The uploaded row did not appear in Equity Staging. Check Finesse's upload messages; re-upload the current lot.</td></tr>
+  <tr><td><span class="badge b-a">already in staging before this upload</span></td><td>The same row was already waiting in staging. Leave it unticked unless you are sure it has not been posted.</td></tr>
+</table>
+
+<h3>10.6 🔴 Client Master service is not reachable</h3>
+<figure><img src="img/20-not-connected.png" /><figcaption>Figure 22 — Service not reachable (red dot)</figcaption></figure>
+<div class="step"><div class="no">1</div><div class="tx">The console window was closed or the PC restarted. Start <b>Contract Note Extractor</b> from the desktop / Start menu and keep its window open; refresh the page.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Until then, PDFs use only the offline local master — expect more locked files.</div></div>
+
+<h3>10.7 Sync from Finesse failed</h3>
+<div class="step"><div class="no">1</div><div class="tx">Open <b>Sync log</b> and read the error.</div></div>
+<div class="step"><div class="no">2</div><div class="tx">Login errors: Start menu → <b>Test Finesse login</b>. If it fails, run <b>Change Finesse login</b> and enter the current Finesse user ID, password and PAN. Then <b>Sync from Finesse</b> again.</div></div>
+<div class="step"><div class="no">3</div><div class="tx">“Layout changed” errors: send the files <code>finesse_report_page.txt</code> and the screenshot in <code>C:\ProgramData\Contract Note Extractor\data</code> to the tool owner. Existing clients stay usable meanwhile.</div></div>
+
+<!-- ============================== 11 ============================== -->
+<h2 class="pb">11. Broker notes</h2>
+<p>The broker is recognised from the note. Rates are always taken <b>after brokerage</b> and checked with two sums: <i>rate ± brokerage per share = rate after brokerage</i> and <i>quantity × rate = total value</i>.</p>
+<table>
+  <tr><th style="width:24%">Broker</th><th>What the tool reads</th></tr>
+  <tr><td><b>Motilal Oswal</b></td><td>“EQUITY SEGMENT” table. The same ISIN usually appears on <b>two rows</b> (BSE Capital and NSE Capital, often with two spellings of the stock name). They are <b>combined into one row</b>: quantities added, rate = quantity-weighted <i>WAP (across exchanges) after brokerage</i>. Trade date from <i>Trade Date</i>, never <i>Settlement Date</i>.</td></tr>
+  <tr><td>Zerodha, Groww, Angel One, IIFL Capital, Bajaj, Anand Rathi</td><td>Per-ISIN “Equity” summary with BUY / SELL after-brokerage columns; per-order annexures ignored.</td></tr>
+  <tr><td>ICICI Direct</td><td>“Summary including statutory levies” block per stock.</td></tr>
+  <tr><td>Kotak, Axis, Religare, others</td><td>Scrip-wise summary or trade table; duplicate summary/detail rows removed.</td></tr>
+</table>
+<p><b>Worked example — Motilal Oswal</b> <span class="sample">(sample stock and figures)</span></p>
+<table>
+  <tr><th>Row on the note</th><th>ISIN</th><th>BUY Qty</th><th>WAP after brokerage</th><th>Total BUY value</th></tr>
+  <tr><td>Alpha Infra Projects Limited (BSE)</td><td>INE000A01015</td><td class="n">1,000</td><td class="n">412.4000</td><td class="n">412,400.0000</td></tr>
+  <tr><td>ALPHA INFRA PROJECTS LTD (NSE)</td><td>INE000A01015</td><td class="n">500</td><td class="n">412.2551</td><td class="n">206,127.5500</td></tr>
+  <tr><th>Tool output (one row)</th><th>INE000A01015</th><th class="n">1,500</th><th class="n">412.3517</th><th class="n">618,527.5500</th></tr>
+</table>
+<p>Check: 618,527.55 ÷ 1,500 = <b>412.3517</b> — matches the result row in Figure 11 (shown as “2 fills”).</p>
+
+<h2>12. Controls and verification</h2>
+<ul>
+  <li><b>Maker–checker:</b> nothing is posted until a second person has checked the rows (or the admin has, where no checker is available — record it).</li>
+  <li>Check every row: client, trading account, ISIN, buy/sell, quantity, rate (2 decimals), trade date.</li>
+  <li>Rows marked <span class="badge b-b">COMPUTED</span>, <span class="badge b-a">AS LABELLED</span> or <span class="badge b-g">CONFIRMED</span> are always checked line by line.</li>
+  <li>Count check: PDFs added = files ✅ Extracted + documented exceptions.</li>
+  <li>Post only rows marked <i>new</i>; record any manual change (typed rate, typed account, exceptional password) with the reason.</li>
+</ul>
+
+<h2>13. Security, backup and updates</h2>
+<ul>
+  <li>The tool runs only on this PC (<code>127.0.0.1:8766</code>). Finesse credentials are stored only in the settings file on this PC; PANs, passwords and the Finesse session are encrypted.</li>
+  <li>Back up <code>ACCESS_TOKENS.txt</code> (encryption key) to the secured IT location after installation.</li>
+  <li>Use your own tool user; log out on shared PCs. Do not share Windows accounts.</li>
+  <li><b>Update:</b> close the tool, run the newer <b>ContractNoteExtractor-Setup.exe</b>, <b>Next → Install</b>. Settings and data in <code>C:\ProgramData\Contract Note Extractor</code> are kept. Record the update in the revision history.</li>
+</ul>
+
+<!-- ============================== Appendices ============================== -->
+<h2 class="pb">Appendix A — Exceptional-password import file</h2>
+<table>
+  <tr><th>Client Name</th><th>Trading Account</th><th>Password</th><th>Password 2 <i>(optional)</i></th></tr>
+  <tr><td>MEERA PATEL HUF</td><td>D100102</td><td>••••••••</td><td></td></tr>
+  <tr><td>SUNITA RAO</td><td>D100104</td><td>••••••••</td><td>••••••••</td></tr>
+</table>
+<ul>
+  <li>Header row required, with a <b>Trading Account</b> (or client code) column and at least one <b>Password</b> column; .xlsx, .xls or .csv.</li>
+  <li>Passwords equal to the client's PAN are skipped automatically (the PAN rule covers them). Duplicates are skipped.</li>
+</ul>
+
+<h2>Appendix B — Status and badge glossary</h2>
+<table>
+  <tr><th style="width:30%">Badge / status</th><th>Meaning</th></tr>
+  <tr><td>✅ Extracted · 🔒 Password failed · ⚠️ Parse issue</td><td>File read and trades found · no password opened it (10.1) · opened but no trades read (10.4)</td></tr>
+  <tr><td><span class="badge b-g">PROVEN</span></td><td>Rate after brokerage proven by both sums (rate ± brokerage, quantity × rate = total value)</td></tr>
+  <tr><td><span class="badge b-b">COMPUTED</span></td><td>Rate calculated from rate ± brokerage, not cross-checked with a total value</td></tr>
+  <tr><td><span class="badge b-a">AS LABELLED</span></td><td>Taken from a column the note labels “net rate”</td></tr>
+  <tr><td><span class="badge b-r">UNVERIFIED</span></td><td>Gross rate only — held back until confirmed (10.3)</td></tr>
+  <tr><td><span class="badge b-g">CONFIRMED</span></td><td>Rate entered or accepted manually</td></tr>
+  <tr><td>🏦 D100101 / ⚠ no account — add</td><td>Trading account found / missing (10.2)</td></tr>
+  <tr><td>“2 fills”</td><td>Combined from two lines or rows of the note (e.g. BSE + NSE)</td></tr>
+</table>
+
+<h2>Appendix C — Daily checklist</h2>
+<table class="check">
+  <tr><th></th><th>Step</th><th style="width:18%">Initials</th></tr>
+  <tr><td>☐</td><td>Tool open, console window kept open, card 2 shows <b>Connected</b> (last sync today)</td><td></td></tr>
+  <tr><td>☐</td><td>All contract notes added; file count checked</td><td></td></tr>
+  <tr><td>☐</td><td>Extraction run; locked files, missing trading accounts and unverified prices resolved</td><td></td></tr>
+  <tr><td>☐</td><td>No red or yellow bar left (or exception recorded)</td><td></td></tr>
+  <tr><td>☐</td><td>Every row checked against the note by the checker</td><td></td></tr>
+  <tr><td>☐</td><td>Filled template downloaded and saved with the date</td><td></td></tr>
+  <tr><td>☐</td><td>Uploaded to Finesse; only “new” rows posted; result “Posted N of N” noted</td><td></td></tr>
+  <tr><td>☐</td><td>New exceptional passwords / trading accounts added; Finesse profile updated where missing</td><td></td></tr>
+  <tr><td>☐</td><td>Clear all — the day's PDFs removed from the tool</td><td></td></tr>
+</table>
+
+<h2>Revision history</h2>
+<table>
+  <tr><th style="width:12%">Version</th><th style="width:18%">Date</th><th>Change</th><th style="width:20%">By</th></tr>
+  <tr><td>1.0</td><td>23 Nov 2026</td><td>First issue: Finesse sync, exceptional passwords, Upload to Finesse, error handling incl. trading account lookup in Finesse, Motilal Oswal support.</td><td></td></tr>
+  <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+  <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+</table>
+</body>
+</html>
