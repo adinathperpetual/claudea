@@ -521,7 +521,7 @@
               <input type="password" id="fsAdmToken" placeholder="Admin token (this session only)" autocomplete="off" />
               <button class="btn dark" id="fsConnect">Connect</button>
             </div>
-            <div class="hint">Connects to the Client Master Sync service (see README). The <b>extractor token</b> lets every user of this browser look up PDF passwords; the <b>admin token</b> opens the exceptional-password list below and is forgotten when you log out.</div>
+            <div class="hint" id="fsTokHint">Connects to the Client Master Sync service (see README). The <b>extractor token</b> lets every user of this browser look up PDF passwords; the <b>admin token</b> opens the exceptional-password list below and is forgotten when you log out.</div>
           </div>
           <div id="fsMain" style="display:none">
             <div class="pw-import">
@@ -3454,12 +3454,15 @@ renderResults();
    manual entry: extraction never fails because of a sync problem. */
 const FS_LS_KEY = "cne_finesse_service_v1", FS_ADMIN_KEY = "cne_finesse_admin_v1";
 const fs = { url:"", ext:"", adm:"", up:false, admin:false, dir:[], reveal:false, logsOpen:false, poll:null };
+const FS_AUTO = window.CNE_SERVICE_AUTO || {};   // tokens handed over by the service on this PC
 (function fsLoad(){
   let c = {}; try{ c = JSON.parse(localStorage.getItem(FS_LS_KEY) || "{}") || {}; }catch(e){}
   fs.url = c.url || ""; fs.ext = c.ext || "";
-  // Opened from the service on this PC: it hands over the lookup-only token itself.
-  if (!fs.ext && window.CNE_SERVICE_AUTO && window.CNE_SERVICE_AUTO.ext) fs.ext = window.CNE_SERVICE_AUTO.ext;
+  // Opened from the service on this PC: it hands over the tokens itself, so they
+  // never have to be typed. The admin token is only used for tool admins (isAdmin()).
+  if (!fs.ext && FS_AUTO.ext) fs.ext = FS_AUTO.ext;
   try{ fs.adm = sessionStorage.getItem(FS_ADMIN_KEY) || ""; }catch(e){}
+  if (!fs.adm && FS_AUTO.adm) fs.adm = FS_AUTO.adm;
 })();
 function fsBase(){
   if (fs.url) return fs.url.replace(/\/+$/,"");
@@ -3519,7 +3522,7 @@ function fsSetStatus(cls, text){
   const s = $("#fsStatus"); if (s) s.textContent = text;
 }
 function fsForgetAdmin(){
-  fs.adm = ""; fs.admin = false; fs.reveal = false;
+  fs.adm = FS_AUTO.adm || ""; fs.admin = false; fs.reveal = false;   // the handed-over token stays
   try{ sessionStorage.removeItem(FS_ADMIN_KEY); }catch(e){}
   if (fs.poll){ clearInterval(fs.poll); fs.poll = null; }
 }
@@ -3527,6 +3530,10 @@ function fsForgetAdmin(){
 var fsReady = Promise.resolve();
 async function fsInit(){
   $("#fsUrl").value = fs.url; $("#fsExtToken").value = fs.ext ? "••••••••" : ""; $("#fsAdmToken").value = "";
+  // tokens supplied automatically -> hide the token boxes
+  $("#fsExtToken").style.display = FS_AUTO.ext ? "none" : "";
+  $("#fsAdmToken").style.display = FS_AUTO.adm ? "none" : "";
+  if (FS_AUTO.ext && FS_AUTO.adm) $("#fsTokHint").textContent = "Access tokens are supplied automatically on this PC — nothing to enter.";
   if (!fs.ext && !fs.adm){ fs.up = false; fsSetStatus("", "Not connected — using the local master only"); fsShowMain(false); return; }
   try{
     await fsFetch("/api/whoami");
@@ -3545,7 +3552,7 @@ async function fsInit(){
   }
   fsShowMain(fs.admin);
   if (fs.admin){ await fsRefresh(); fpCheckActive(); }
-  else fsSetStatus("ok", `Connected · ${fs.dir.length} clients from Finesse` + (isAdmin() ? " · enter the admin token to manage exceptional passwords" : ""));
+  else fsSetStatus("ok", `Connected · ${fs.dir.length} clients from Finesse` + (isAdmin() && !FS_AUTO.adm ? " · enter the admin token to manage exceptional passwords" : ""));
 }
 function fsShowMain(on){
   $("#fsMain").style.display = on ? "" : "none";

@@ -120,14 +120,21 @@ LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 @app.get("/")
 def index(request: Request):
-    """Serve the extractor. Opened on this PC itself, it is pre-connected with the
-    (lookup-only) extractor token, so users never have to paste it. The admin token
-    is still required for the Client Master screen."""
+    """Serve the extractor. Opened on this PC itself (the service only listens on
+    127.0.0.1 by default), it is pre-connected with both tokens, so nobody has to
+    paste one. The page still shows the admin features (Client Master, sync, upload
+    to Finesse) only to users signed in to the tool as admin."""
     html = (BUNDLE / "index.html").read_text(encoding="utf-8")
     s = get_settings()
     host = request.client.host if request.client else ""
-    if host in LOOPBACK and s.extractor_tokens:
-        boot = "<script>window.CNE_SERVICE_AUTO=" + json.dumps({"ext": s.extractor_tokens[0]}) + ";</script>"
+    auto = {}
+    if host in LOOPBACK:
+        if s.extractor_tokens:
+            auto["ext"] = s.extractor_tokens[0]
+        if s.admin_tokens:
+            auto["adm"] = s.admin_tokens[0]
+    if auto:
+        boot = "<script>window.CNE_SERVICE_AUTO=" + json.dumps(auto) + ";</script>"
         html = html.replace("</head>", boot + "\n</head>", 1)
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
