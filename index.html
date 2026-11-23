@@ -2883,6 +2883,7 @@ function unresolvedClients(){
   state.results.forEach(r => {
     if (!r.trades?.length || !r.client) return;
     if (r.acctStatus === "matched") return;
+    if (r.acctStatus === "manual" && r.acct) return;   // entered in the "Trading account needed" pop-up
     if (!seen.has(r.client)) seen.set(r.client, { client:r.client, status:r.acctStatus, candidates:r.candidates||[], files:[] });
     seen.get(r.client).files.push(r.file);
   });
