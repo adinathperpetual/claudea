@@ -3236,10 +3236,12 @@ async function authInit(){
   authLog = lsGet(AUTH_LOG_KEY) || [];
   if (!authUsers.length){ authUsers = [ await makeUser("admin","admin","admin",true) ]; saveUsers(); }
   let sess = lsGet(AUTH_SESS_KEY);
+  const remembered = !!sess;   // "Keep me signed in" was ticked at the last sign-in
   if (!sess){ try{ sess = JSON.parse(sessionStorage.getItem(AUTH_SESS_KEY)||"null"); }catch(e){} }
   if (sess && sess.username){
     const u = authUsers.find(x=>x.username===sess.username && !x.disabled);
-    if (u && !u.mustChange){ enterApp(u); return; }
+    // keep the remembered sign-in for the next start too (it used to be dropped here)
+    if (u && !u.mustChange){ enterApp(u, remembered); return; }
   }
   showGate();
 }
