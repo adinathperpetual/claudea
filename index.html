@@ -1717,6 +1717,28 @@ function extractTrades(lines){
 }
 
 /* ---- Broker format memory --------------------------------------------------
+   MOTILAL OSWAL (Motilal Oswal Financial Services Limited) — detected via
+   /motilal\s*oswal/. Reader: extractMotilal(). Regression notes:
+   tests/fixtures/motilal-*.txt (run: node tests/run.js).
+   On paper: "EQUITY SEGMENT" table, one row per ISIN per exchange —
+     ISIN | Security Name Symbol | BUY(Quantity, WAP (across exchanges),
+     Brokerage per Share, WAP (across exchanges) after brokerage (Rs), Total BUY
+     Value after brokerage) | SELL(same five) | Net Quantity | Net Obligation.
+   The same ISIN usually appears on TWO rows (BSE Capital + NSE Capital) with
+   different names ("Aeroflex Industries Limited" / "AEROFLEX INDUSTRIES LTD").
+   They are combined into ONE row per ISIN + side: qty summed, rate = qty-weighted
+   WAP after brokerage. Examples (both BUY, client SAMPLE CLIENT NAME HUF):
+     13 Oct 2026  INE0FFK01017  100 @ 1843.6929 + 442 @ 1840.6274 = 542 @ 1841.1930
+     19 Nov 2026  INE024001021 2000 @ 490.6716 + 2000 @ 490.5837 = 4000 @ 490.6277
+   In the TEXT LAYER the table is transposed: each line holds one field for all
+   rows ("Quantity 2000 2000", "WAP 490.4264 490.3386", "0.2452 0.2452") — so it
+   is identified arithmetically per column, never by per-line row parsing.
+   Client name: value line "<UCC> <NAME> <ADDRESS>" ("ABC1234 SAMPLE CLIENT
+   NAME HUF FLAT NO 12 ..."), labels on other lines (findClientName step 0).
+   Trade date: "<Contract Note Number> <dd Mon yyyy>" ("100002 19 Nov 2026"), or
+   footer "Date : 19 Nov 2026" — NOT the settlement date "20 Nov 2026"
+   (findTradeDate). The per-trade "Exchange-wise details" pages are ignored.
+
    ANGEL ONE (Angel One Limited)  — detected via /angel\s*(one|broking)/.
    Section header: "Equity Segment - Trade Summary". One row per ISIN, BUY block +
    SELL block + Net Obligation (same shape as Anand Rathi/IIFL). Brokerage is
@@ -1855,7 +1877,7 @@ const cleanName = s => String(s).replace(/\s+/g," ")
 function findClientName(lines){
   // 0) Motilal Oswal: labels and values are on separate lines. The value line
   //    starts with the UCC code, then the client name, then the address:
-  //    "AUSFBP3 NAGORI BHARAT MITHALAL HUF FL NO 601 ESPERANZA ...". Take the words
+  //    "ABC1234 SAMPLE CLIENT NAME HUF FLAT NO 12 SAMPLE ...". Take the words
   //    after the code up to the first address word / number.
   if (lines.some(l => /motilal\s*oswal/i.test(l.text))){
     const ADDR_WORD = /^(fl|flat|flr|floor|no\.?|plot|room|rm|house|h\.?no|bldg|building|wing|shop|office|off|c\/o|s\/o|d\/o|w\/o|at|post|po|vill|village|sector|block|street|st|road|rd|lane|near|nr|opp|behind|apartment|apt|society|soc|tower|cts|survey|gali|chawl|bunglow|bungalow|villa|unit|suite|door)$/i;
@@ -2065,7 +2087,7 @@ function findClientName(lines){
 function findTradeDate(lines){
   const full = lines.map(l=>l.text).join("\n");
   // Motilal Oswal: the "Trade Date" label sits apart from its value; the value
-  // line reads "<Contract Note Number> <dd Mon yyyy>" ("668477 13 Oct 2026"), and
+  // line reads "<Contract Note Number> <dd Mon yyyy>" ("100001 13 Oct 2026"), and
   // the footer repeats it as "Date : 13 Oct 2026". The generic search would
   // otherwise grab the settlement date ("- 14/10/2026)").
   if (/motilal\s*oswal/i.test(full)){

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SOP — Contract Note Extractor</title>
+<link href="../desktop/web/vendor/fonts.css" rel="stylesheet" />
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+  :root{ --ink:#111827; --muted:#5d6779; --line:#d9deea; --accent:#4f46e5; --soft:#eef0ff; --green:#059669; --red:#dc2626; --amber:#b45309; }
+  *{ box-sizing:border-box }
+  body{ font-family:"Inter",Arial,sans-serif; font-size:10.2pt; line-height:1.5; color:#1b2333; margin:0 }
+  h1,h2,h3{ font-family:"Space Grotesk","Inter",Arial,sans-serif; color:var(--ink); letter-spacing:-.01em }
+  h1{ font-size:24pt; margin:0 0 4px }
+  h2{ font-size:14.5pt; margin:22px 0 8px; padding-bottom:5px; border-bottom:2px solid var(--accent); break-after:avoid }
+  h3{ font-size:11.5pt; margin:16px 0 6px; break-after:avoid }
+  p{ margin:6px 0 }
+  ol,ul{ margin:6px 0 8px; padding-left:22px }
+  li{ margin:3px 0 }
+  code,.k{ font-family:"IBM Plex Mono",monospace; font-size:9pt; background:#f3f4f8; border:1px solid #e4e7ef; border-radius:4px; padding:0 4px }
+  b.ui{ color:var(--accent) }
+  table{ width:100%; border-collapse:collapse; margin:8px 0 10px; font-size:9.3pt; break-inside:avoid }
+  th,td{ border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top }
+  th{ background:#f3f5fa; font-weight:600 }
+  td.n{ text-align:right; font-family:"IBM Plex Mono",monospace }
+  figure{ margin:10px 0 14px; break-inside:avoid; text-align:center }
+  figure img{ max-width:100%; border:1px solid var(--line); border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.06) }
+  figure.half img{ max-width:72% }
+  figcaption{ font-size:8.6pt; color:var(--muted); margin-top:4px }
+  .note,.warn,.tip{ border-radius:6px; padding:8px 12px; margin:10px 0; break-inside:avoid; font-size:9.6pt }
+  .note{ background:var(--soft); border-left:4px solid var(--accent) }
+  .warn{ background:#fff6e6; border-left:4px solid var(--amber) }
+  .tip{ background:#e7f8f1; border-left:4px solid var(--green) }
+  .cover{ height:250mm; display:flex; flex-direction:column; justify-content:space-between; break-after:page }
+  .cover .band{ background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; border-radius:14px; padding:34px 32px }
+  .cover .band h1{ color:#fff; font-size:30pt }
+  .cover .band .sub{ font-size:13pt; opacity:.9 }
+  .cover .eyebrow{ font-family:"IBM Plex Mono",monospace; font-size:9pt; letter-spacing:.2em; text-transform:uppercase; opacity:.85; margin-bottom:10px }
+  .meta td:first-child{ width:34%; background:#f8f9fc; font-weight:600 }
+  .toc{ columns:2; column-gap:26px; font-size:9.8pt; padding-left:18px }
+  .badge{ display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:8pt; font-weight:600; padding:1px 6px; border-radius:4px; border:1px solid }
+  .b-proven{ color:#059669; background:#e7f8f1; border-color:#b5e8d3 }
+  .b-computed{ color:#1d4ed8; background:#eaf1ff; border-color:#c3d5fb }
+  .b-stated{ color:#b45309; background:#fff6e6; border-color:#f6d9a6 }
+  .b-gross{ color:#dc2626; background:#fdecec; border-color:#f7c4c4 }
+  .check td:first-child{ width:26px; text-align:center; font-size:12pt }
+  .pb{ break-before:page }
+  .sign td{ height:34px }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <div class="band">
+    <div class="eyebrow">Standard Operating Procedure · CNE-SOP-01</div>
+    <h1>Contract Note Extractor</h1>
+    <div class="sub">Extracting equity trades from broker contract notes into the output template</div>
+  </div>
+  <div>
+    <table class="meta">
+      <tr><td>Document number</td><td>CNE-SOP-01</td></tr>
+      <tr><td>Version</td><td>1.0</td></tr>
+      <tr><td>Effective date</td><td>23 Nov 2026</td></tr>
+      <tr><td>Applies to</td><td>Contract Note Extractor — Windows app (<code>Contract Note Extractor.exe</code>) and browser version (<code>index.html</code>)</td></tr>
+      <tr><td>Process owner</td><td>&nbsp;</td></tr>
+      <tr><td>Prepared by</td><td>&nbsp;</td></tr>
+      <tr><td>Reviewed by</td><td>&nbsp;</td></tr>
+      <tr><td>Approved by</td><td>&nbsp;</td></tr>
+    </table>
+    <h3>Contents</h3>
+    <ol class="toc">
+      <li>Purpose</li><li>Scope</li><li>Roles and responsibilities</li><li>Requirements and installation</li>
+      <li>First-time setup (Admin)</li><li>Daily procedure (Operator)</li><li>Reviewing the results</li>
+      <li>Exporting</li><li>Broker-specific notes</li><li>Maintaining the client master</li>
+      <li>Controls and verification</li><li>Troubleshooting</li><li>Data security</li><li>Updating the tool</li>
+      <li>Appendix A — Client master format</li><li>Appendix B — Status and badge glossary</li>
+      <li>Appendix C — Daily checklist</li><li>Revision history</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================ 1–4 ============================ -->
+<h2>1. Purpose</h2>
+<p>This SOP describes how to use the <b>Contract Note Extractor</b> to read equity contract notes (PDF) received from brokers, unlock password-protected notes, extract each trade — <b>client, trading account, scrip/ISIN, buy/sell, quantity, rate after brokerage (WAP) and trade date</b> — and write them into the firm's output template (<code>Template.xlsx</code>) in a controlled, verifiable way.</p>
+
+<h2>2. Scope</h2>
+<ul>
+  <li><b>In scope:</b> equity (cash segment) contract notes in PDF form, delivery and intraday, from the brokers listed in section 9 and other brokers using a standard SEBI layout.</li>
+  <li><b>Out of scope:</b> F&amp;O / currency / commodity trades, scanned image-only PDFs (no text layer), DP charges statements, ledgers and holding statements (the tool ignores these automatically).</li>
+  <li>All processing happens <b>on the user's own computer</b>. No file, password or result is uploaded anywhere.</li>
+</ul>
+
+<h2>3. Roles and responsibilities</h2>
+<table>
+  <tr><th style="width:22%">Role</th><th>Responsibilities</th></tr>
+  <tr><td><b>Admin</b></td><td>Installs the tool; creates and disables users; maintains the <b>client master</b> (client name, trading account, PDF password); uploads the output template and sets template options; reviews the sign-in log.</td></tr>
+  <tr><td><b>Operator</b> (normal user)</td><td>Adds contract notes, runs the extraction, resolves pop-ups (locked files, missing accounts, unverified prices), reviews every row and exports the filled template. Cannot see the client master or passwords.</td></tr>
+  <tr><td><b>Checker</b></td><td>Independently verifies the exported rows against the original contract notes as per section 11 before the data is used downstream.</td></tr>
+</table>
+
+<h2>4. Requirements and installation</h2>
+<ul>
+  <li>Windows 10 or 11 (64-bit) with Microsoft Edge (built in) or Google Chrome. No internet connection and no installation are needed.</li>
+  <li>Unzip <code>Contract Note Extractor.zip</code> to a permanent folder (e.g. <code>D:\Tools\Contract Note Extractor</code>) and double-click <b>Contract Note Extractor.exe</b>. The tool opens in its own window.</li>
+  <li>First run only: if Windows shows <i>“Windows protected your PC”</i>, click <b>More info → Run anyway</b> (the program is not digitally signed).</li>
+  <li>To close: close the window. The program stops by itself within about 5 minutes. Starting it again while it is still running simply opens a new window.</li>
+</ul>
+<div class="warn"><b>Keep using the same computer and browser.</b> Saved data (client master, users, template, uploaded PDFs) is stored inside the Edge/Chrome profile on that computer. Another PC, another Windows user or another browser starts empty.</div>
+
+<!-- ============================ 5 ============================ -->
+<h2>5. First-time setup (Admin)</h2>
+<h3>5.1 Sign in and set the admin password</h3>
+<ol>
+  <li>Start the tool. Sign in with username <code>admin</code> and password <code>admin</code>.</li>
+  <li>The tool immediately asks for a new password (minimum 4 characters). Enter it twice and click <b class="ui">Save &amp; continue</b>. Record it in the firm's password vault.</li>
+  <li>Leave <i>“Keep me signed in on this device”</i> ticked only on a personal computer.</li>
+</ol>
+<figure class="half"><img src="img/01-signin.png" /><figcaption>Figure 1 — Sign-in screen</figcaption></figure>
+
+<h3>5.2 Create users</h3>
+<ol>
+  <li>Scroll to <b>★ Users &amp; sign-in log</b> (or click <b class="ui">Users</b> at the top right).</li>
+  <li>Enter a username and password, choose <b>Normal user</b> for operators or <b>Admin</b> for administrators, click <b class="ui">Add user</b>.</li>
+  <li>Use <b class="ui">Reset</b> to change a forgotten password and <b class="ui">Disable</b> when a person leaves. At least one active admin is always kept.</li>
+  <li>The <b>Sign-in log</b> tab records every successful and failed sign-in; download it monthly with <b class="ui">Download log .xlsx</b> for audit.</li>
+</ol>
+<figure><img src="img/12-users.png" /><figcaption>Figure 2 — Users and sign-in log (Admin only)</figcaption></figure>
+
+<h3>5.3 Prepare and import the client master</h3>
+<p>One Excel/CSV file holds, for every client: <b>Client Name</b>, <b>Trading Account</b> and <b>Password</b> (the PDF password). Format and rules are in <b>Appendix A</b>.</p>
+<ol>
+  <li>In card <b>2 · Client master</b> click <b class="ui">Import .xlsx / .csv / .txt</b> and choose the file.</li>
+  <li>Check the toast message, e.g. <i>“Loaded 4 clients · 3 accounts · 3 passwords.”</i></li>
+  <li>Open <b>Loaded clients</b> and click <b class="ui">👁 Reveal</b> to check the list; any missing account or password shows in <span style="color:var(--red)">red “none”</span>.</li>
+</ol>
+<div class="note"><b>Importing replaces the saved master.</b> Always import the complete, latest file — not just new clients.</div>
+<figure><img src="img/05-client-master.png" /><figcaption>Figure 3 — Client master card with the list revealed</figcaption></figure>
+
+<h3>5.4 Upload the output template and set options</h3>
+<ol>
+  <li>In card <b>3 · Output template</b> click <b class="ui">Upload Template.xlsx</b> and choose the firm's template. It is remembered for next time.</li>
+  <li>Set the options (they are remembered):
+    <table>
+      <tr><th style="width:30%">Option</th><th>Use</th></tr>
+      <tr><td>Trade Type</td><td><b>Delivery</b> (default) or Intraday — written in every row.</td></tr>
+      <tr><td>Transaction Category</td><td><b>MARKET</b> (default) or OFF_MARKET.</td></tr>
+      <tr><td>Market Price Per Share</td><td><b>Net rate (incl. brokerage)</b> — standard. Use <i>Market rate (excl. brokerage)</i> only when instructed.</td></tr>
+      <tr><td>Existing template rows</td><td><b>Replace with new data</b> (default) or <i>Keep and append below</i>.</td></tr>
+    </table>
+  </li>
+</ol>
+<figure><img src="img/06-template.png" /><figcaption>Figure 4 — Output template card</figcaption></figure>
+
+<!-- ============================ 6 ============================ -->
+<h2>6. Daily procedure (Operator)</h2>
+<h3>6.1 Collect and name the contract notes</h3>
+<ul>
+  <li>Save the day's PDF contract notes in one working folder.</li>
+  <li>The file name must <b>end with the client name after the last underscore</b>, exactly as it appears in the client master — this is how the PDF password is found. Example: <code>CN_19112026_SAMPLE CLIENT NAME HUF.pdf</code>.</li>
+  <li>Capital letters, dots and dashes in the name do not matter; spelling does.</li>
+</ul>
+
+<h3>6.2 Add the PDFs</h3>
+<ol>
+  <li>Sign in. In card <b>1 · Contract notes</b> drag the PDFs onto the drop area, or click <b class="ui">Choose PDF files</b>.</li>
+  <li>Check that every file is listed. Remove a wrong file with its <b>×</b>.</li>
+</ol>
+<figure><img src="img/04-contract-notes.png" /><figcaption>Figure 5 — Contract notes added</figcaption></figure>
+
+<h3>6.3 Run the extraction</h3>
+<ol>
+  <li>Click <b class="ui">▶ Extract from all files</b>. A progress bar shows each file.</li>
+  <li>When it finishes, the tool may open pop-ups — resolve them in this order:</li>
+</ol>
+<table>
+  <tr><th style="width:30%">Pop-up</th><th>What to do</th></tr>
+  <tr><td><b>🔒 Some files stayed locked</b></td><td>None of the saved passwords opened the file. Type the correct password and click <b>Retry</b>. Then add that password to the client master (section 10) so it opens automatically next time. If unknown, dismiss — the row stays “Password failed”.</td></tr>
+  <tr><td><b>₹ Price could not be verified</b></td><td>No brokerage figure was found, so the after-brokerage rate is unproven and the row is <b>held back from the template</b>. Check the note: type the after-brokerage rate and <b>Confirm</b>, or tick <i>“This note has no brokerage”</i> if that is correct.</td></tr>
+  <tr><td><b>🏦 Trading account needed</b></td><td>The client name in the note did not match the master confidently. Pick a “Did you mean” suggestion or type the account, keep <i>“Add to my master list”</i> ticked, click <b>Save</b>.</td></tr>
+</table>
+<figure class="half"><img src="img/09-locked.png" /><figcaption>Figure 6 — Locked file: enter the password and Retry</figcaption></figure>
+<figure class="half"><img src="img/10-missing-account.png" /><figcaption>Figure 7 — Trading account needed</figcaption></figure>
+<p>Locked files can be reopened at any time with <b class="ui">Enter passwords</b> in the dark bar above the results, or <b>🔑 Enter password</b> in the row.</p>
+
+<!-- ============================ 7 ============================ -->
+<h2>7. Reviewing the results</h2>
+<figure><img src="img/08-results.png" /><figcaption>Figure 8 — Extracted trades (sample data)</figcaption></figure>
+<p>Each row is one scrip and side per contract note. Review <b>every row</b>:</p>
+<table>
+  <tr><th style="width:24%">Column</th><th>Check</th></tr>
+  <tr><td>File / Status</td><td><span class="badge b-proven">✅ Extracted</span> expected. <span class="badge b-gross">🔒 Password failed</span> or <span class="badge b-stated">⚠️ Parse issue</span> must be resolved (section 12). Broker name is shown under the file name.</td></tr>
+  <tr><td>Customer</td><td>Client name as printed on the note, with the trading account in green (🏦). <span style="color:var(--red)">⚠ no account — add</span> means it must be added (click it).</td></tr>
+  <tr><td>Security / Scrip</td><td>Name and ISIN. Rows without ISIN are flagged in the yellow bar.</td></tr>
+  <tr><td>B/S</td><td>▲ Buy / ▼ Sell — matches the note.</td></tr>
+  <tr><td>Net Qty</td><td>Total quantity for the scrip and side. “2 fills” means it was combined from two lines/rows of the note.</td></tr>
+  <tr><td>WAP (incl. brokerage)</td><td>Rate per share <b>after brokerage</b>, with how it was obtained and a badge (Appendix B). Spot-check against the note.</td></tr>
+  <tr><td>Trade Date</td><td>Trade date — <b>not</b> the settlement date.</td></tr>
+</table>
+<p>Coloured bars above the table summarise anything still open: <b>dark</b> — locked files; <b style="color:var(--red)">red</b> — rows held back (price unverified); <b style="color:var(--amber)">yellow</b> — missing accounts, ISINs or trade dates. <b>Do not export while a bar is showing</b> unless the item has been reviewed and accepted.</p>
+<div class="tip"><b>🔍 Inspect text</b> on any row shows exactly what the tool read from the PDF. Use it when a value looks wrong, and send its text to the tool maintainer if a broker layout is not read correctly.</div>
+<figure><img src="img/11-inspect.png" /><figcaption>Figure 9 — Inspect text (diagnostics)</figcaption></figure>
+
+<!-- ============================ 8 ============================ -->
+<h2>8. Exporting</h2>
+<ol>
+  <li>Click <b class="ui">Download filled template</b>. The rows are written into your own <code>Template.xlsx</code> (colours, comments and date format kept) and saved as <code>Template-filled.xlsx</code>. Rows with an unverified price are left out until confirmed.</li>
+  <li>Optional: <b class="ui">Export Excel (.xlsx)</b> or <b class="ui">Export CSV</b> for a full review file including status and basis of every row.</li>
+  <li>Save the files in the day's working folder with the date in the name, e.g. <code>Template-filled_2026-11-19.xlsx</code>.</li>
+  <li>When finished, click <b class="ui">Clear records</b> (keeps PDFs and the client master) and remove the day's PDFs from card 1 with <b>×</b>.</li>
+</ol>
+<table>
+  <tr><th>Template column</th><th>Filled with</th></tr>
+  <tr><td>A Trading Account · B Customer Name · C Trade Date</td><td>From the client master / note (date as yyyy-mm-dd)</td></tr>
+  <tr><td>H ISIN · K Quantity · L Market Price Per Share</td><td>From the note (price per the “Market Price Per Share” option, 2 decimals)</td></tr>
+  <tr><td>I Trade Type · P Transaction Category</td><td>From the template options</td></tr>
+  <tr><td>J PURCHASE / SELL · Q Buy / Sell</td><td>From the side</td></tr>
+  <tr><td>N Total STT</td><td>Always 0</td></tr>
+  <tr><td>Red-header columns</td><td>Always left blank</td></tr>
+</table>
+
+<!-- ============================ 9 ============================ -->
+<h2>9. Broker-specific notes</h2>
+<p>The tool recognises the broker from the note and reads its summary table. Rates are taken <b>after brokerage</b> and checked arithmetically (rate ± brokerage per share = rate after brokerage; quantity × rate = total value).</p>
+<table>
+  <tr><th style="width:24%">Broker</th><th>What the tool reads</th></tr>
+  <tr><td><b>Motilal Oswal</b></td><td>“EQUITY SEGMENT” table. Client name from <i>Client Name</i>, trade date from <i>Trade Date</i> (not Settlement Date). <b>The same ISIN often appears on two rows</b> (BSE Capital and NSE Capital, with two spellings of the name). They are combined into <b>one row</b>: quantities added, rate = quantity-weighted <i>WAP (across exchanges) after brokerage</i>. SELL columns with 0 are ignored.</td></tr>
+  <tr><td>Zerodha</td><td>“Equity” summary per ISIN; per-order annexure ignored. Client name after the UCC code.</td></tr>
+  <tr><td>Groww</td><td>“EQUITY” summary; sell quantity printed negative; Annexure A ignored.</td></tr>
+  <tr><td>Angel One, IIFL Capital, Bajaj, Anand Rathi</td><td>“Equity Segment” per-ISIN summary with BUY / SELL after-brokerage columns.</td></tr>
+  <tr><td>ICICI Direct</td><td>“Summary including statutory levies” block per scrip; per-order detail ignored.</td></tr>
+  <tr><td>Kotak, Axis, Religare, others</td><td>Scrip-wise summary or trade table; duplicate summary/detail rows removed.</td></tr>
+</table>
+<h3>Worked example — Motilal Oswal (19 Nov 2026, SAMPLE CLIENT NAME HUF)</h3>
+<table>
+  <tr><th>Row on the note</th><th>ISIN</th><th>BUY Qty</th><th>WAP after brokerage</th><th>Total BUY value</th></tr>
+  <tr><td>Aeroflex Industries Limited (BSE)</td><td>INE024001021</td><td class="n">2,000</td><td class="n">490.6716</td><td class="n">981,343.2953</td></tr>
+  <tr><td>AEROFLEX INDUSTRIES LTD (NSE)</td><td>INE024001021</td><td class="n">2,000</td><td class="n">490.5837</td><td class="n">981,167.4789</td></tr>
+  <tr><th>Tool output (one row)</th><th>INE024001021</th><th class="n">4,000</th><th class="n">490.6277</th><th class="n">1,962,510.7742</th></tr>
+</table>
+<p>Check: 1,962,510.7742 ÷ 4,000 = <b>490.6277</b>. Trade date <b>19 Nov 2026</b> (settlement 20 Nov 2026 is not used).</p>
+<div class="note">A new broker or a changed layout: if rows are missing or wrong, click <b>🔍 Inspect text</b>, copy the text and send it with a screenshot of the note's summary table to the tool maintainer. Do not key such notes manually into the template without recording it.</div>
+
+<!-- ============================ 10 ============================ -->
+<h2>10. Maintaining the client master (Admin)</h2>
+<ol>
+  <li>Keep the master Excel file as the single source of truth. To add or change clients, edit the file and <b>re-import the complete file</b>.</li>
+  <li>Accounts added from the “Trading account needed” pop-up are saved in the tool. To keep the file up to date, click <b class="ui">Download updated master</b>.</li>
+  <li><b>Download check:</b> if any client is missing a trading account or a password, a pop-up lists them with what is missing. Fill each one and click <b>Save</b>; the <b>Download master</b> button unlocks only when every client is complete.</li>
+  <li>Store the downloaded <code>client-master.xlsx</code> in the secured shared folder and replace the previous version.</li>
+  <li><b class="ui">Clear saved master</b> removes all accounts and passwords from the tool (asks for confirmation).</li>
+</ol>
+<figure class="half"><img src="img/07-master-gap.png" /><figcaption>Figure 10 — Missing account / password must be completed before download</figcaption></figure>
+
+<!-- ============================ 11–14 ============================ -->
+<h2>11. Controls and verification</h2>
+<ul>
+  <li><b>Maker–checker:</b> the operator exports; a checker verifies before the template is used.</li>
+  <li><b>Checker verifies, for every row:</b> client, trading account, ISIN, buy/sell, quantity, rate after brokerage (2 decimals) and trade date against the contract note.</li>
+  <li>Rows marked <span class="badge b-computed">COMPUTED</span>, <span class="badge b-stated">AS LABELLED</span> or <span class="badge b-proven">CONFIRMED</span> (manually entered) must always be checked line by line.</li>
+  <li><b>Count check:</b> number of PDFs added = number of files with status ✅ Extracted (+ documented exceptions).</li>
+  <li><b>Total check (recommended):</b> for each note, quantity × rate ≈ the note's net total before levies.</li>
+  <li>Any manual correction (typed rate, manually added account) is recorded in the day's log with the reason.</li>
+</ul>
+
+<h2>12. Troubleshooting</h2>
+<table>
+  <tr><th style="width:34%">Problem</th><th>Action</th></tr>
+  <tr><td>🔒 Password failed</td><td>Check the client name at the end of the file name matches the client master; check the password in the master; enter it manually with Retry.</td></tr>
+  <tr><td>⚠️ “No text layer (scanned image?)”</td><td>The PDF is an image. Request the original digital note from the broker.</td></tr>
+  <tr><td>⚠️ “No trade table found” / “no rows matched”</td><td>Layout not recognised. Use 🔍 Inspect text and escalate (section 9 note).</td></tr>
+  <tr><td>Customer shows “Not found” or a wrong name</td><td>Escalate with Inspect text. The trading account can still be added from the pop-up.</td></tr>
+  <tr><td>Trade date is the settlement date</td><td>Correct in the template before use and escalate with Inspect text.</td></tr>
+  <tr><td>Saved data (users, master) has disappeared</td><td>Different PC, Windows user or browser, or browser data was cleared. Re-import the master and recreate users.</td></tr>
+  <tr><td>Window does not open</td><td>Make sure Edge or Chrome is installed; wait 5 minutes for an old instance to stop; start the .exe again.</td></tr>
+  <tr><td>Forgot admin password</td><td>Another admin uses <b>Reset</b>. If no admin can sign in, the tool's browser data must be cleared and the setup repeated.</td></tr>
+</table>
+
+<h2>13. Data security</h2>
+<ul>
+  <li>Everything runs locally; the Windows app listens only on this computer (127.0.0.1, port 47821) and is not reachable from the network.</li>
+  <li>Users and passwords are an on-device access gate, not server security. Use Windows sign-in on the PC and do not share Windows accounts.</li>
+  <li>Client passwords are stored in the browser profile on the PC. Use the tool only on firm-controlled computers; never on shared or personal devices.</li>
+  <li>Remove processed PDFs from card 1 after each run and keep downloaded files in access-controlled folders.</li>
+</ul>
+
+<h2>14. Updating the tool</h2>
+<ul>
+  <li>Close the tool and wait 5 minutes (or restart the PC), then replace <code>Contract Note Extractor.exe</code> with the new version in the same folder. Saved data is kept.</li>
+  <li>Record the update (date, version, reason) in the revision history below.</li>
+</ul>
+
+<!-- ============================ Appendices ============================ -->
+<h2 class="pb">Appendix A — Client master format</h2>
+<table>
+  <tr><th>Client Name</th><th>Trading Account</th><th>Password</th><th>Password 2 <i>(optional)</i></th></tr>
+  <tr><td>SAMPLE CLIENT NAME HUF</td><td>ABC1234</td><td>••••••••</td><td></td></tr>
+  <tr><td>Priya Sharma</td><td>XYZ5678</td><td>••••••••</td><td>••••••••</td></tr>
+</table>
+<ul>
+  <li>First row = headers as above (recommended). Columns may be in any order. File types: .xlsx, .xls, .csv or .txt.</li>
+  <li><b>Client Name</b> must be spelled exactly as at the end of the PDF file names. HUF, LLP, Ltd etc. are part of the name.</li>
+  <li>More than one password: add columns <code>Password 2</code>, <code>Password 3</code>… or repeat the client on another row. All are tried.</li>
+  <li>Account matching allows for missing middle names and reversed name order, but never matches an HUF to an individual.</li>
+</ul>
+
+<h2>Appendix B — Status and badge glossary</h2>
+<table>
+  <tr><th style="width:28%">Badge / status</th><th>Meaning</th></tr>
+  <tr><td><span class="badge b-proven">PROVEN</span></td><td>Rate after brokerage proven twice: rate ± brokerage = rate after brokerage <i>and</i> quantity × rate = total value printed on the note.</td></tr>
+  <tr><td><span class="badge b-computed">COMPUTED</span></td><td>Rate calculated from rate ± brokerage per share (or net total ÷ quantity) but not cross-checked against a total value.</td></tr>
+  <tr><td><span class="badge b-stated">AS LABELLED</span></td><td>Taken from a column the note labels as net rate.</td></tr>
+  <tr><td><span class="badge b-gross">UNVERIFIED</span></td><td>Only a gross rate was found — held back from the template until confirmed.</td></tr>
+  <tr><td><span class="badge b-proven">CONFIRMED</span></td><td>Rate entered or accepted manually by the operator.</td></tr>
+  <tr><td>✅ Extracted · 🔒 Password failed · ⚠️ Parse issue</td><td>File opened and trades found · no password opened the file · file opened but no trades read.</td></tr>
+</table>
+
+<h2>Appendix C — Daily checklist</h2>
+<table class="check">
+  <tr><th></th><th>Step</th><th style="width:18%">Initials</th></tr>
+  <tr><td>☐</td><td>All contract notes for the day saved; file names end with “_&lt;client name&gt;.pdf”</td><td></td></tr>
+  <tr><td>☐</td><td>Signed in with own user; PDFs added; count matches</td><td></td></tr>
+  <tr><td>☐</td><td>Extraction run; all pop-ups resolved (locked / price / account)</td><td></td></tr>
+  <tr><td>☐</td><td>No dark, red or yellow bar remains (or exceptions documented)</td><td></td></tr>
+  <tr><td>☐</td><td>Every row reviewed: client, account, ISIN, B/S, qty, rate, trade date</td><td></td></tr>
+  <tr><td>☐</td><td>Filled template downloaded and saved with the date in the file name</td><td></td></tr>
+  <tr><td>☐</td><td>Checker verification completed</td><td></td></tr>
+  <tr><td>☐</td><td>Records cleared and processed PDFs removed from the tool</td><td></td></tr>
+  <tr><td>☐</td><td>New passwords / accounts added to the client master; updated master downloaded</td><td></td></tr>
+</table>
+
+<h2>Revision history</h2>
+<table class="sign">
+  <tr><th style="width:12%">Version</th><th style="width:18%">Date</th><th>Change</th><th style="width:20%">By</th></tr>
+  <tr><td>1.0</td><td>23 Nov 2026</td><td>First issue: Windows app, single client master, Motilal Oswal support, master download check.</td><td></td></tr>
+  <tr><td></td><td></td><td></td><td></td></tr>
+  <tr><td></td><td></td><td></td><td></td></tr>
+</table>
+
+</body>
+</html>

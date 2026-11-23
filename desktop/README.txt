@@ -1,6 +1,10 @@
 CONTRACT NOTE EXTRACTOR — Windows desktop app
 ==============================================
 
+FULL INSTRUCTIONS
+  See "Contract-Note-Extractor-SOP.pdf" in this folder (Standard Operating
+  Procedure: setup, daily steps, review, export, checks, troubleshooting).
+
 HOW TO START
   Double-click "Contract Note Extractor.exe".
   The tool opens in its own window (Microsoft Edge or Google Chrome app window).

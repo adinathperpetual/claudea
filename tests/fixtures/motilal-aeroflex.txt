@@ -1,0 +1,149 @@
+for ISIN 981343.2953 981167.4789
+Net Obligation
+2000 2000
+Derivatives Net Obligation for ISIN (Before Levies) (Rs) *
+Net Quantity
+NSE Clearing (NCL) NSE Currency
+0.0000 0.0000
+Total SELL Value after brokerage
+0.0000 0.0000
+WAP after (Rs)
+(across
+exchanges) brokerage
+SELL 0.0000 0.0000
+e per Share (Rs)
+ABCXX-XX-1Z MAHARASHTRA/MH Brokerag
+NSE Clearing (NCL) NSE F&O
+s) 0.0000 0.0000
+WAP
+(across exchange
+0 0
+Quantity
+2026219- T+1 20 Nov 2026
+Total BUY Value after brokerage 981343.2953 981167.4789
+PAN No GST No. of Client (If Available) State Name/Code (Place of Supply) WAP after (Rs)
+(across 490.6716 490.5837 Page 1
+NSE Clearing (NCL) NSE Capital exchanges) brokerage
+CONTRACT NOTE
+0.2452 0.2452
+BUY
+Brokerage per Share
+Motilal Oswal Financial Services Limited
+Member Code - BSE:446, NSE:10412, MCX:55930, NCDEX:01240
+WAP 490.4264 490.3386
+(across
+exchanges)
+Compliance Officer: Mr. Neeraj Agarwal (Email id:na@motilaloswal.com,Tel: 022-40548085)
+SEBI Regn. No.(BSE/NSE/MCX/NCDEX): INZ000158836, CIN. No.: L67190MH2005PLC153397
+2000 2000
+Quantity
+Email:query@motilaloswal.com Visit us at: www.motilaloswal.com Email ID For Investor Complaints:grievances@motilaloswal.com BSE Clearing (ICCL) BSE Capital
+CDSL AND NSDL : IN-DP-16-2015, AMFI:ARN 146822, SEBI Research Analyst: INH000000412, IRDA CORPORATE AGENT: CA0579
+Corr Add: Palm Spring Centre, 2nd Floor, Link Road, Malad(W), Mumbai - 400064. Telephone: +91 22 7188 1000 Fax No: 022 - 71881333
+Registered Office:Motilal Oswal Tower, Rahimtullah Sayani Road,Opposite Parel ST Depot, Prabhadevi Mumbai - 400025 Telephone:+91 22 7193 4263/4200 Dealing Office Address : Jn.Of Gokhale & Sayani Rd, Parel ST Depot,Prabhadevi Mum 25, , Mumbai, , IN, 400025, 2230102432, test@motilaloswal.com
+Settlement No. Settlement Date
+Security Name Symbol
+Aeroflex Industries Limited AEROFLEX INDUSTRIES LTD
+ABC1234 SAMPLE CLIENT NAME HUF FLAT NO 12 SAMPLE SOCIETY , MG ROAD PUNE 411001 MAHARASHTRA Security Description
+100002 19 Nov 2026
+ISIN
+Contract Note Number Trade Date UCCCODE & Trading Back Office Code Client Name Address Sir/Madam, I/We have this day done by your order and on your account the following transactions: EQUITY SEGMENT INE024001021 INE024001021
+0 0 0 0
+Rem arks
+(-999206.35)
+by Client) (-999206.3500)
+Net Amount Receivable by -9209.35 -7373.08 -1843.52 -1843.57 -1843.92 -1844.32
+Client / (Payable (Before -11055.42 -16584.49 -20271.58 -14746.97 -16592.59 -11063.83
+Net Total
+Levies) (Rs.)
+0.00
+0.0000 9.20 7.36 1.84 1.84 1.84 1.84
+11.04 16.56 20.24 14.72 16.56 11.04
+IPFT STT
+0.89 1.07 1.61 1.96 0.71 1.43 0.18 0.18 1.61 0.18 1.07 0.18
+150.00 GST
+150.0000
+Stamp Duty
+For
+Closing ) (Rs.)
+Rate Per Unit (Only
+1.00 Derivatives
+1.0000
+Fees
+SEBI Turnover Net Rate Per Unit 1841.8705 1842.5708 1842.7209 1842.8710 1843.2712 1843.3712 1843.5213 1843.5713 1843.6214 1843.9215 1843.9715 1844.3217
+INR(Rs.) @
+31.87
+31.8700 0.9205 0.9208 0.9209 0.9210 0.9212 0.9212 0.9213 0.9213 0.9214 0.9215 0.9215 0.9217
+(Rs.)
+Per Unit
+Brokerage
+Exchange Charges
+Transaction
+(*2)
+0.00 Per Unit INR(Rs.) 1840.9500 1841.6500 1841.8000 1841.9500 1842.3500 1842.4500 1842.6000 1842.6500 1842.7000 1843.0000 1843.0500 1843.4000
+0.0000 Trade Price
+(*4)
+Per ) (*1)
+IGST (@18.00%) Gross de Price Unit(In Foreign
+Rate/Tra Currency
+0.00 5D 6D 9D 4D 8D 1D 1D 9D 1D 6D 1D
+11D
+0.0000
+(*4) Quantity Page 2
+B/ S B B B B B B B B B B B B
+UTT (@9.00%)
+49.93
+49.9300
+(*4)
+SGST (@9.00%)
+49.93
+49.9300
+(*4)
+CGST (@9.00%)
+Security/Contract Description
+554.74
+554.7400
+Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited
+Taxable Value of Supply (TV) (*3)
+Trade Time
+997.00 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51
+997.0000
+Security
+Transaction Tax
+Trade No.
+7484100 7484300 7484500 7484700 7484900 7485100 7485300 7485500 7485700 7485900 7486100 7486300
+- 20/11/2026)
+-997404.75 Order Time
+Obligation -997404.7500 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43 12:38:43
+Payin / Payout
+Order No.
+BSE Clearing (ICCL) BSE Capital NSE Clearing (NCL) NSE Capital T+0 NSE Clearing (NCL) NSE Capital T+1 NSE Clearing (NCL) NSE F&O NSE Clearing (NCL) NSE Currency Derivatives Total (Net) Net amount payable by client : Rs. 999206.35 ( Nine Lakh Ninety Nine Thousand Two Hundred Six Rupees and Thirty Five Paise Only ) Exchange - wise details of orders and trades is provided below: BSE - Capital (2026193 - M 17918682914949778 44 17918682914949778 44
+Rem arks
+(Before -20288.09 -22137.26 -14758.58 -11050.92 -16583.59 -23955.37 -11062.33
+Net Total
+Levies) (Rs.)
+STT
+GST
+Net Rate Per Unit 1844.3717 1844.6219 1844.6719 1844.7219 1844.7719 1844.8220 1841.3202 1841.3202 1841.3202
+Per Unit INR(Rs.) 1843.4500 1843.7000 1843.7500 1843.8000 1843.8500 1843.9000 1840.4000 1840.4000 1840.4000
+Quantity Page 3
+B/ S B B B B B B B B B
+Security/Contract Description
+Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited Aeroflex Industries Limited AEROFLEX INDUSTRIES LTD AEROFLEX INDUSTRIES LTD AEROFLEX INDUSTRIES LTD
+Trade Time
+12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:38:51 12:39:30 12:39:30 12:39:30
+Order No.
+17918682914949778 44 17918682914949778 44 NSE - Capital (2026193 - M 1200000055619712 1200000055619712
+Net Total -132229.28 -119659.80 -997926.62
+132.50 119.62 997.40
+(Rs.) 12.5000 12.5000
+4000.00
+Quantity Page 4
+Security/Contract Description
+AEROFLEX INDUSTRIES LTD AEROFLEX INDUSTRIES LTD AEROFLEX INDUSTRIES LTD ISIN : INE024001021 - Net Total
+Yours faithfully,
+For Motilal Oswal Financial Services Ltd. PAN of Trading Member : AAECM2876P
+GSTIN of Trading Member : 27AAECM2876P1ZR
+Authorised Signatories : Ajay Menon,Subhash Earath,Neeraj Agarwal,Nayana Suvarna,Kishore Narne.
+Page 5
+Customer Service Contact Numbers: 022-40548000/6749060 Date : 19 Nov 2026 Place : Mumbai

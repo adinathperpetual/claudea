@@ -71,6 +71,8 @@ rm -rf "$DIST" && mkdir -p "$DIST/$APP"
 (cd "$HERE" && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
   go build -trimpath -ldflags "-s -w -H windowsgui" -o "$DIST/$APP/$APP.exe" .)
 cp "$HERE/README.txt" "$DIST/$APP/README.txt"
+SOP="$ROOT/docs/Contract-Note-Extractor-SOP.pdf"   # rebuild with: node docs/build-sop.js
+if [ -f "$SOP" ]; then cp "$SOP" "$DIST/$APP/"; else echo "  (SOP PDF not found — skipped)"; fi
 (cd "$DIST" && rm -f "$APP.zip" && zip -qr "$APP.zip" "$APP")
 
 echo "✓ Built:"
